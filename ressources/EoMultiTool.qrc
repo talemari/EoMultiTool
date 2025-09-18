@@ -1,0 +1,10 @@
+<!DOCTYPE RCC><RCC version="1.0">
+    <qresource prefix="/Ressources">
+        <file>images/emptyPortrait.jpeg</file>
+        <file>IcyVeinStyle.qss</file>
+		<file>SpyBot.qss</file>
+		<file>Toolery.qss</file>
+		<file>Perstfic.qss</file>
+		<file>Space.qss</file>
+    </qresource>
+</RCC>
