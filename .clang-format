@@ -1,0 +1,16 @@
+# keep your existing settings...
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 140
+DerivePointerAlignment: false
+PointerAlignment: Left
+SpacesInParentheses: true
+SpacesInSquareBrackets: true
+SpacesInAngles: true
+SpaceInEmptyParentheses: false
+BreakBeforeBraces: Allman
+AllowShortFunctionsOnASingleLine: None
+AllowShortBlocksOnASingleLine: Never
+BreakConstructorInitializers: BeforeComma # leading-comma style
+ConstructorInitializerIndentWidth: 4
+PackConstructorInitializers: Never

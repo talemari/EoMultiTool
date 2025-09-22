@@ -1,4 +1,9 @@
 .vs/
+.vscode/
 x64/
 Logs/
 EoMultiTool/
+ressources/generated/
+msvc/
+build/
+cmake/

@@ -4,6 +4,7 @@
 #include <QProgressBar>
 #include <QVBoxLayout>
 
+
 DataLoadingWidget::DataLoadingWidget( QWidget* parent )
 	: QWidget( parent )
 	, mainProgressBar_( new QProgressBar )

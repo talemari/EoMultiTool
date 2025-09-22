@@ -1,14 +1,15 @@
 #pragma once
 #include "FileDownloader.h"
+#include "ZipExtractor.h"
 
-#include <QFile>
-#include <QGroupBox>
 
 class QLabel;
 class QNetworkAccessManager;
 class QNetworkReply;
 class QProgressBar;
 class QThread;
+
+class QuaZip;
 
 class DataLoader : public QObject
 {
@@ -30,9 +31,12 @@ private slots:
 
 private:
 	void LoadingStepProgressed();
+	void ExtractSde();
+	void TriggerError( const QString& errorMessage );
 
 private:
 	FileDownloader* fileDownloader_ = nullptr;
+  ZipExtractor zipExtractor_;
 	QFile sdeZipFile_;
 	unsigned int currentDataLoadingStep_ = 0;
 };

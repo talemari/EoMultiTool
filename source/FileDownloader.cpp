@@ -2,10 +2,8 @@
 #include "LogManager.h"
 
 #include <QDir>
-#include <QFileInfo>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
-#include <QUrl>
 
 FileDownloader::FileDownloader( QObject* parent /* = nullptr */)
 	: QObject( parent )
