@@ -1,5 +1,6 @@
 #include "DataLoader.h"
 #include "LogManager.h"
+#include "ZipExtractor.h"
 
 #include <array>
 #include <qdir.h>
@@ -21,18 +22,9 @@ static constexpr std::array< const char*, 11 > currentDataLoadingStep = { "Start
                                                                           "Loading dogma effects...",
                                                                           "Finalizing..." };
 
-static inline bool ensureParentDir( const QString& filePath )
-{
-    const QString parent = QFileInfo( filePath ).absolutePath();
-    if ( QDir().mkpath( parent ) )
-        return true;
-    return false;
-}
-
 DataLoader::DataLoader( QObject* parent )
     : QObject( parent )
     , sdeZipFile_( SDE_ZIP_PATH )
-    , zipExtractor_( QString( SDE_ZIP_PATH ), QString( SDE_EXTRACTED_PATH ) )
 {
 }
 
@@ -40,13 +32,10 @@ void DataLoader::StartDataLoading()
 {
     LOG_NOTICE( "Starting data loading..." );
     currentDataLoadingStep_ = 0;
-    LoadingStepProgressed();
+    connect( this, &DataLoader::SdeDownloaded, this, &DataLoader::ExtractSde );
+    connect( this, &DataLoader::SdeExtracted, this, &DataLoader::ValidateSde );
 
-    fileDownloader_ = new FileDownloader( this );
-    fileDownloader_->Start( SDE_ZIP_PATH, SDE_URL );
-    connect( fileDownloader_, &FileDownloader::DownloadProgress,
-             [ this ]( qint64 current, qint64 total ) { emit SubDataLoadingStepChanged( current, total, "Downloading SDE" ); } );
-    connect( fileDownloader_, &FileDownloader::DownloadFinished, this, &DataLoader::OnSdeDownloadFinished );
+    DownloadSde();
 }
 
 void DataLoader::OnSdeDownloadFinished( bool isSuccess )
@@ -57,8 +46,18 @@ void DataLoader::OnSdeDownloadFinished( bool isSuccess )
         return;
     }
     LOG_NOTICE( "SDE downloaded successfully." );
+    delete fileDownloader_;
     LoadingStepProgressed();
-    ExtractSde();
+    emit SdeDownloaded();
+}
+
+void DataLoader::DownloadSde()
+{
+    fileDownloader_ = new FileDownloader( this );
+    fileDownloader_->Start( SDE_ZIP_PATH, SDE_URL );
+    connect( fileDownloader_, &FileDownloader::DownloadProgress,
+             [ this ]( qint64 current, qint64 total ) { emit SubDataLoadingStepChanged( current, total, "Downloading SDE" ); } );
+    connect( fileDownloader_, &FileDownloader::DownloadFinished, this, &DataLoader::OnSdeDownloadFinished );
 }
 
 void DataLoader::LoadingStepProgressed()
@@ -70,118 +69,30 @@ void DataLoader::LoadingStepProgressed()
 
 void DataLoader::ExtractSde()
 {
-    int zipErr = 0;
-    zip_t* za = zip_open( SDE_ZIP_PATH, 0, &zipErr );
-    if ( !za )
-    {
-        DataLoader::TriggerError( QStringLiteral( "zip_open failed (err=%1)" ).arg( zipErr ) );
+    ZipExtractor zipExtractor;
+    connect( &zipExtractor, &ZipExtractor::ExtractionProgress, [ this ]( uint current, uint total, const QString& fileName )
+             { emit SubDataLoadingStepChanged( current, total, fileName ); } );
+    connect( &zipExtractor, &ZipExtractor::ErrorOccurred, this, &DataLoader::TriggerError );
+    const bool isSuccess = zipExtractor.ExtractZip( SDE_ZIP_PATH, SDE_EXTRACTED_PATH );
+    if ( !isSuccess )
         return;
-    }
+    LOG_NOTICE( "SDE extracted successfully." );
+    LoadingStepProgressed();
+    emit SdeExtracted();
+}
 
-    QDir dest( SDE_EXTRACTED_PATH );
-    if ( !dest.exists() && !QDir().mkpath( dest.absolutePath() ) )
-    {
-        DataLoader::TriggerError( QStringLiteral( "Failed to create destination: %1" ).arg( SDE_EXTRACTED_PATH ) );
-        zip_close( za );
+void DataLoader::ValidateSde()
+{
+    ZipExtractor zipExtractor;
+    connect( &zipExtractor, &ZipExtractor::ValidationProgress, [ this ]( uint current, uint total, const QString& fileName )
+             { emit SubDataLoadingStepChanged( current, total, fileName ); } );
+    connect( &zipExtractor, &ZipExtractor::ErrorOccurred, this, &DataLoader::TriggerError );
+    const bool isSuccess = zipExtractor.ValidateExtractedData( SDE_ZIP_PATH, SDE_EXTRACTED_PATH );
+    if ( !isSuccess )
         return;
-    }
-
-    const zip_int64_t entryCount = zip_get_num_entries( za, 0 );
-
-    int totalFiles = 0;
-    for ( zip_uint64_t i = 0; i < entryCount; ++i )
-    {
-        zip_stat_t st;
-        zip_stat_init( &st );
-        if ( zip_stat_index( za, i, 0, &st ) != 0 )
-            continue;
-        const QString name = QString::fromUtf8( st.name );
-        if ( !name.endsWith( '/' ) )
-            ++totalFiles;
-    }
-
-    int completed = 0;
-    constexpr size_t BUF_SIZE = 1 << 16; // 64 KiB
-
-    // Second pass: extract.
-    for ( zip_uint64_t i = 0; i < entryCount; ++i )
-    {
-        zip_stat_t st;
-        zip_stat_init( &st );
-        if ( zip_stat_index( za, i, 0, &st ) != 0 )
-            continue;
-
-        const QString relName = QString::fromUtf8( st.name );
-
-        // Directory entry
-        if ( relName.endsWith( '/' ) )
-        {
-            QDir().mkpath( dest.filePath( relName ) );
-            continue;
-        }
-
-        // Open file inside zip
-        zip_file_t* zf = zip_fopen_index( za, i, 0 );
-        if ( !zf )
-        {
-            DataLoader::TriggerError( QStringLiteral( "Failed to open zip entry: %1" ).arg( relName ) );
-            zip_close( za );
-            return;
-        }
-
-        const QString outPath = QDir::cleanPath( dest.filePath( relName ) );
-
-        if ( !ensureParentDir( outPath ) )
-        {
-            DataLoader::TriggerError( QStringLiteral( "Failed to create directory for: %1" ).arg( outPath ) );
-            zip_fclose( zf );
-            zip_close( za );
-            return;
-        }
-
-        QFile out( outPath );
-        if ( !out.open( QIODevice::WriteOnly | QIODevice::Truncate ) )
-        {
-            DataLoader::TriggerError( QStringLiteral( "Cannot write file: %1" ).arg( outPath ) );
-            zip_fclose( zf );
-            zip_close( za );
-            return;
-        }
-
-        QByteArray buffer;
-        buffer.resize( int( BUF_SIZE ) );
-
-        while ( true )
-        {
-            const zip_int64_t n = zip_fread( zf, buffer.data(), buffer.size() );
-            if ( n == 0 )
-                break; // EOF
-            if ( n < 0 )
-            {
-                DataLoader::TriggerError( QStringLiteral( "Read error in entry: %1" ).arg( relName ) );
-                out.close();
-                zip_fclose( zf );
-                zip_close( za );
-                return;
-            }
-            if ( out.write( buffer.constData(), n ) != n )
-            {
-                DataLoader::TriggerError( QStringLiteral( "Write error for: %1" ).arg( outPath ) );
-                out.close();
-                zip_fclose( zf );
-                zip_close( za );
-                return;
-            }
-        }
-
-        out.close();
-        zip_fclose( zf );
-
-        ++completed;
-        emit SubDataLoadingStepChanged( completed, totalFiles, relName );
-    }
-
-    zip_close( za );
+    LOG_NOTICE( "SDE validated successfully." );
+    LoadingStepProgressed();
+    emit SdeValidated();
 }
 
 void DataLoader::TriggerError( const QString& errorMessage )

@@ -6,9 +6,14 @@ class ZipExtractor : public QObject
     Q_OBJECT
 
 public:
-    ZipExractor( const QString& zipPath, const QString& zipDest, QObject* parent = nullptr );
+    ZipExtractor( QObject* parent = nullptr );
+    ~ZipExtractor() = default;
 
-private:
-    QString zipPath_;
-  QString zipDest_;
+    bool ExtractZip( const QString& zipPath, const QString& destPath );
+    bool ValidateExtractedData( const QString& zipPath, const QString& destPath );
+
+signals:
+    void ExtractionProgress( uint extractedFiles, uint totalFiles, const QString& fileName );
+    void ValidationProgress( uint validatedFiles, uint totalFiles, const QString& fileName );
+    void ErrorOccurred( const QString& errorMessage );
 };

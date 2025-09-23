@@ -30,17 +30,9 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(zlib)
 
-set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(ZLIB_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
-set(LIBZIP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
-set(BUILD_TOOLS OFF CACHE BOOL "" FORCE)
-set(LIBZIP_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(LIBZIP_BUILD_REGRESS OFF CACHE BOOL "" FORCE)
-set(BUILD_REGRESS OFF CACHE BOOL "" FORCE)
-set(LIBZIP_BUILD_DOC OFF CACHE BOOL "" FORCE)   # man / update-html
-set(BUILD_DOC OFF CACHE BOOL "" FORCE)
-set(LIBZIP_DO_INSTALL OFF CACHE BOOL "" FORCE)
+# Disable libzip installation/export when vendoring
+set(LIBZIP_DO_INSTALL OFF CACHE BOOL "" FORCE)     # <- primary switch in recent libzip
+# (extra belt & suspenders; keep libzip lean)
 set(BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(BUILD_REGRESS OFF CACHE BOOL "" FORCE)
 set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -55,18 +47,16 @@ set(ENABLE_ZSTD OFF CACHE BOOL "" FORCE)
 add_subdirectory( "${CMAKE_CURRENT_SOURCE_DIR}/libraries/libzip/" )
 
 
-file(GLOB MYAPP_SOURCES CONFIGURE_DEPENDS
+file(GLOB_RECURSE MYAPP_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/include/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/*.hpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/ressources/*.qrc"
 )
-qt_add_resources(EoMultiTool_qrc
-  "${CMAKE_CURRENT_SOURCE_DIR}/ressources/EoMultiTool.qrc"
-)
+
 add_executable(EoMultiTool
                 ${MYAPP_SOURCES}
   )
-set_target_properties(EoMultiTool PROPERTIES AUTOGEN_SOURCE_GROUP "Generated Files")
-source_group("Generated Files" REGULAR_EXPRESSION "mocs_compilation_.*|qrc_.*")
 
 target_include_directories(EoMultiTool PRIVATE
                            ${CMAKE_SOURCE_DIR}/include
@@ -74,18 +64,17 @@ target_include_directories(EoMultiTool PRIVATE
                            ${CMAKE_CURRENT_BINARY_DIR}/libraries/libzip/lib
                            )
 
-if (WIN32 AND TARGET Qt6::qmake AND NOT CMAKE_CONFIGURATION_TYPES)
+if (WIN32 AND TARGET Qt6::qmake AND NOT CMAKE_CONFIGURATION_TYPES) # single-config
     add_custom_command(TARGET EoMultiTool POST_BUILD
-        COMMAND "Qt6::windeployqt --no-compiler-runtime \"$<TARGET_FILE:EoMultiTool>\""
+        COMMAND Qt6::windeployqt --no-compiler-runtime \"$<TARGET_FILE:EoMultiTool>\"
         COMMENT "Deploying Qt dependencies (single-config)..."
     )
-
 elseif (WIN32 AND TARGET Qt6::qmake) # multi-config (Visual Studio)
     foreach(config ${CMAKE_CONFIGURATION_TYPES})
         add_custom_command(TARGET EoMultiTool POST_BUILD
-            COMMAND "Qt6::windeployqt
+            COMMAND Qt6::windeployqt
                 --no-compiler-runtime
-                \"$<TARGET_FILE:EoMultiTool>\""
+                \"$<TARGET_FILE:EoMultiTool>\"
             COMMENT "Deploying Qt dependencies for $<CONFIG>..."
         )
     endforeach()
