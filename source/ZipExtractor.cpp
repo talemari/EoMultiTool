@@ -15,6 +15,13 @@ static inline bool EnsureParentDir( const QString& filePath )
     return false;
 }
 
+static QString GetZipErrorString( int zipErrorCode )
+{
+    char errBuf[ 1024 ];
+    zip_error_to_str( errBuf, sizeof( errBuf ), zipErrorCode, errno );
+    return QString::fromUtf8( errBuf );
+}
+
 static uLong Crc32OfFile( const QString& path, qint64* outSize = nullptr )
 {
     QFile file( path );
@@ -54,13 +61,14 @@ bool ZipExtractor::ExtractZip( const QString& zipPath, const QString& destPath )
     }
 
     int zipErr = 0;
-    const char* cZipPath = zipPath.toUtf8().constData();
-    const char* cDestPath = destPath.toUtf8().constData();
 
-    zip_t* za = zip_open( cZipPath, 0, &zipErr );
+    zip_t* za = zip_open( zipPath.toUtf8().constData(), 0, &zipErr );
     if ( !za )
     {
-        ErrorOccurred( QStringLiteral( "zip_open failed (err=%1)" ).arg( zipErr ) );
+        ErrorOccurred( QStringLiteral( "failed to open zip \"%1\" failed (err=%2) : %3" )
+                           .arg( zipPath.toUtf8().constData() )
+                           .arg( zipErr )
+                           .arg( GetZipErrorString( zipErr ) ) );
         return false;
     }
 
@@ -257,7 +265,8 @@ bool ZipExtractor::ValidateExtractedData( const QString& zipPath, const QString&
         }
 
         ++completed;
-        Q_EMIT ValidationProgress( completed, totalFiles, relName );
+        if ( completed % 100 == 0 || completed == totalFiles )
+            Q_EMIT ValidationProgress( completed, totalFiles, relName );
     }
 
     zip_close( za );

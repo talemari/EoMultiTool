@@ -1,7 +1,8 @@
+#include "MainWindow.h"
 #include "DataLoader.h"
 #include "DataLoadingWidget.h"
 #include "LogManager.h"
-#include "MainWindow.h"
+#include "RessourcesManager.h"
 #include "SideMenu.h"
 
 #include <QApplication>
@@ -24,31 +25,34 @@ MainWindow::MainWindow( const QString& appName, const QString& version, QWidget*
     , centralWidget_( new QWidget )
     , pages_( new QStackedWidget )
     , sideMenu_( new SideMenu )
+    , ressourcesManager_( std::make_shared< RessourcesManager >() )
 {
     app_ = dynamic_cast< QApplication* >( QApplication::instance() );
     installEventFilter( this );
 
     setWindowTitle( appName_ + " version : " + version_ );
-	setFixedSize( 1280, 720 );
+    setFixedSize( 1280, 720 );
 
     BuildBaseInterface();
-	AddStylesheet( ":/Ressources/Space.qss" );
+    AddStylesheet( ":/Ressources/Space.qss" );
     ReloadStylesheets();
-  
+
     AddKeyboardEvent( Qt::Key_F, [ this ]() { SetFullscreenMode( !GetIsFullScreen() ); } );
     AddKeyboardEvent( Qt::Key_Escape, [ this ]() { emit close(); } );
     AddKeyboardEvent( Qt::Key_S, [ this ]() { ReloadStylesheets(); } );
 
-	sideMenu_->AddItem( tr("Home") );
-    sideMenu_->AddItem( tr("Industry") );
+    sideMenu_->AddItem( tr( "Home" ) );
+    sideMenu_->AddItem( tr( "Industry" ) );
 
-	LOG_NOTICE( "Main window initialized" );
+    LOG_NOTICE( "Main window initialized" );
 
-	StartDataLoading();
+    StartDataLoading();
 }
 
 MainWindow::~MainWindow()
 {
+    dataLoadingThread_->quit();
+    dataLoadingThread_->wait();
 }
 
 bool MainWindow::eventFilter( QObject* target, QEvent* event )
@@ -166,18 +170,18 @@ void MainWindow::BuildBaseInterface()
 
 void MainWindow::StartDataLoading()
 {
-	DataLoader* dataLoader = new DataLoader();
-	DataLoadingWidget* dataLoadingWidget = new DataLoadingWidget;
-	AddPage( dataLoadingWidget );
-	GoToPage( pages_->count() - 1 );
+    DataLoader* dataLoader = new DataLoader( ressourcesManager_ );
+    DataLoadingWidget* dataLoadingWidget = new DataLoadingWidget;
+    AddPage( dataLoadingWidget );
+    GoToPage( pages_->count() - 1 );
 
-	dataLoadingThread_ = new QThread( this );
-	dataLoader->moveToThread( dataLoadingThread_ );
+    dataLoadingThread_ = new QThread( this );
+    dataLoader->moveToThread( dataLoadingThread_ );
 
-	connect( dataLoader, &DataLoader::MainDataLoadingStepChanged, dataLoadingWidget, &DataLoadingWidget::OnMainDataLoadingStepChanged );
-	connect( dataLoader, &DataLoader::SubDataLoadingStepChanged, dataLoadingWidget, &DataLoadingWidget::OnSubDataLoadingStepChanged );
-	connect( dataLoader, &DataLoader::ErrorOccurred, dataLoadingWidget, &DataLoadingWidget::OnErrorOccurred );
+    connect( dataLoader, &DataLoader::MainDataLoadingStepChanged, dataLoadingWidget, &DataLoadingWidget::OnMainDataLoadingStepChanged );
+    connect( dataLoader, &DataLoader::SubDataLoadingStepChanged, dataLoadingWidget, &DataLoadingWidget::OnSubDataLoadingStepChanged );
+    connect( dataLoader, &DataLoader::ErrorOccurred, dataLoadingWidget, &DataLoadingWidget::OnErrorOccurred );
 
-	connect( dataLoadingThread_, &QThread::started, dataLoader, &DataLoader::StartDataLoading );
-	dataLoadingThread_->start();
+    connect( dataLoadingThread_, &QThread::started, dataLoader, &DataLoader::StartDataLoading );
+    dataLoadingThread_->start();
 }

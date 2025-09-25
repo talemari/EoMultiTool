@@ -13,6 +13,7 @@ class QVBoxLayout;
 class SideMenu;
 class DataLoader;
 class DataLoadingWidget;
+class RessourcesManager;
 
 class MainWindow : public QMainWindow
 {
@@ -27,9 +28,9 @@ protected:
     void resizeEvent( QResizeEvent* event ) override;
 
     void AddKeyboardEvent( Qt::Key key, std::function< void( void ) > action );
-	void AddStylesheet( const QString& sheet );
+    void AddStylesheet( const QString& sheet );
     QString LoadStyleSheet( const QString& path );
-	void ReloadStylesheets();
+    void ReloadStylesheets();
 
     void SetFullscreenMode( bool fullscreen );
     void AddPage( QWidget* page );
@@ -40,7 +41,7 @@ protected:
 
 private:
     void BuildBaseInterface();
-	void StartDataLoading();
+    void StartDataLoading();
 
 signals:
     void ClickedOnWindow();
@@ -57,5 +58,6 @@ private:
     QStackedWidget* pages_ = nullptr;
     SideMenu* sideMenu_ = nullptr;
     QStringList activeStylesheets_;
-	QThread* dataLoadingThread_;
+    QThread* dataLoadingThread_;
+    std::shared_ptr< RessourcesManager > ressourcesManager_;
 };

@@ -1,25 +1,24 @@
 #pragma once
-#include <QWidget>
+#include <QGroupBox>
 
 class QLabel;
 class QProgressBar;
 
-class DataLoadingWidget : public QWidget
+class DataLoadingWidget : public QGroupBox
 {
-	Q_OBJECT
+    Q_OBJECT
 public:
-	DataLoadingWidget( QWidget* parent = nullptr );
-	~DataLoadingWidget() = default;
+    DataLoadingWidget( QWidget* parent = nullptr );
+    ~DataLoadingWidget() = default;
 
 public slots:
-	void OnMainDataLoadingStepChanged( int currentStep, int maxStep, const QString& description );
-	void OnSubDataLoadingStepChanged( int currentStep, int maxStep, const QString& description );
-	void OnErrorOccurred( const QString& errorMessage );
+    void OnMainDataLoadingStepChanged( int currentStep, int maxStep, const QString& description );
+    void OnSubDataLoadingStepChanged( int currentStep, int maxStep, const QString& description );
+    void OnErrorOccurred( const QString& errorMessage );
 
 private:
-	QProgressBar* mainProgressBar_;
-	QProgressBar* subProgressBar_;
-	QLabel* mainProgressLabel_;
-	QLabel* subProgressLabel_;
+    QProgressBar* mainProgressBar_;
+    QProgressBar* subProgressBar_;
+    QLabel* mainProgressLabel_;
+    QLabel* subProgressLabel_;
 };
-

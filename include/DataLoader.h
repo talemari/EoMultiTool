@@ -7,11 +7,30 @@ class QNetworkReply;
 class QProgressBar;
 class QThread;
 
+class RessourcesManager;
+
+enum class eDataLoadingSteps
+{
+    Waiting,
+    DownloadingSde,
+    ExtractingSde,
+    ValidatingSde,
+    LoadingYamlFiles,
+    LoadingItemGroups,
+    LoadingItemCategories,
+    LoadingBlueprints,
+    LoadingAttributes,
+    LoadingDogmaAttributes,
+    LoadingDogmaEffects,
+    Finalizing,
+    Count
+};
+
 class DataLoader : public QObject
 {
     Q_OBJECT
 public:
-    DataLoader( QObject* parent = nullptr );
+    DataLoader( std::shared_ptr< RessourcesManager > ressourcesManager, QObject* parent = nullptr );
     ~DataLoader() override = default;
 
     void StartDataLoading();
@@ -25,19 +44,23 @@ signals:
     void SdeDownloaded();
     void SdeExtracted();
     void SdeValidated();
+    void YamlsLoaded();
 
 private slots:
     void OnSdeDownloadFinished( bool isSuccess );
     void ExtractSde();
     void ValidateSde();
+    void LoadYamls();
 
 private:
     void DownloadSde();
-    void LoadingStepProgressed();
+    void SetLoadingStep( eDataLoadingSteps step );
     void TriggerError( const QString& errorMessage );
 
 private:
+    std::shared_ptr< RessourcesManager > ressourcesManager_;
     FileDownloader* fileDownloader_ = nullptr;
-    QFile sdeZipFile_;
-    unsigned int currentDataLoadingStep_ = 0;
+    eDataLoadingSteps currentDataLoadingStep_ = eDataLoadingSteps::Waiting;
+    const QString sdeExtractedPath_;
+    const QString sdeZipPath_;
 };
