@@ -11,7 +11,6 @@ class QStackedWidget;
 class QVBoxLayout;
 
 class SideMenu;
-class DataLoader;
 class DataLoadingWidget;
 class RessourcesManager;
 

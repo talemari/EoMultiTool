@@ -1,42 +1,49 @@
 #pragma once
+#include "Blueprint.h"
+#include "DataLoader.h"
+
+#include <memory>
+#include <optional>
 #include <qobject.h>
+#include <string>
+#include <unordered_map>
 
 class QFile;
 class QJsonObject;
-
-struct EveType
-{
-    unsigned int typeID = 0;
-    unsigned int groupID = 0;
-    std::optional< unsigned int > categoryID = 0;
-    std::optional< unsigned int > marketGroupID = 0;
-    std::optional< unsigned int > iconID = 0;
-    std::string name = "";
-    std::optional< std::string > description = "";
-    bool published = false;
-    std::optional< double > volume = 0.0;
-};
+class EveType;
 
 class RessourcesManager : public QObject
 {
     Q_OBJECT
-public:
-    explicit RessourcesManager( QObject* parent = nullptr );
-    ~RessourcesManager() = default;
 
-    bool LoadSdeData( const QString& extractedSdePath );
+public:
+    RessourcesManager( QObject* parent = nullptr );
+    ~RessourcesManager() override = default;
+
+    RessourcesManager( const RessourcesManager& ) = delete;
+    RessourcesManager& operator=( const RessourcesManager& ) = delete;
+
+public slots:
+    void LoadRessources();
 
 signals:
     void RessourcesReady();
-    void RessourcesLoadingProgress( int current, int total, const QString& progressDescription );
-    void RessourcesLoadingMainStepChanged( int step );
+    void RessourcesLoadingMainStepChanged( int current, int total, const QString& progressDescription );
+    void RessourcesLoadingSubStepChanged( int current, int total, const QString& progressDescription );
     void ErrorOccured( const QString& errorMessage );
 
 private:
-    EveType ParseJsonToEveType( const QJsonObject& jsonData );
+    void SetLoadingStep( eDataLoadingSteps step );
     bool BuildTypesMap( const QString& typesFilePath );
+    bool BuildBlueprintsMap( const QString& blueprintsFilePath );
     bool OpenFile( const QString& filePath, QFile& target );
 
+private slots:
+    void LoadSdeData( const QString& extractedSdePath );
+
 private:
-    std::unordered_map< unsigned int, EveType > types_;
+    std::unordered_map< unsigned int, std::shared_ptr< EveType > > types_;
+    std::unordered_map< unsigned int, std::shared_ptr< Blueprint > > blueprints_;
+    std::unique_ptr< DataLoader > dataLoader_ = nullptr;
+    bool isRessourcesReady_ = false;
 };

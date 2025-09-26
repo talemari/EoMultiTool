@@ -1,5 +1,4 @@
 #include "MainWindow.h"
-#include "DataLoader.h"
 #include "DataLoadingWidget.h"
 #include "LogManager.h"
 #include "RessourcesManager.h"
@@ -170,18 +169,29 @@ void MainWindow::BuildBaseInterface()
 
 void MainWindow::StartDataLoading()
 {
-    DataLoader* dataLoader = new DataLoader( ressourcesManager_ );
     DataLoadingWidget* dataLoadingWidget = new DataLoadingWidget;
     AddPage( dataLoadingWidget );
     GoToPage( pages_->count() - 1 );
 
     dataLoadingThread_ = new QThread( this );
-    dataLoader->moveToThread( dataLoadingThread_ );
+    ressourcesManager_->moveToThread( dataLoadingThread_ );
 
-    connect( dataLoader, &DataLoader::MainDataLoadingStepChanged, dataLoadingWidget, &DataLoadingWidget::OnMainDataLoadingStepChanged );
-    connect( dataLoader, &DataLoader::SubDataLoadingStepChanged, dataLoadingWidget, &DataLoadingWidget::OnSubDataLoadingStepChanged );
-    connect( dataLoader, &DataLoader::ErrorOccurred, dataLoadingWidget, &DataLoadingWidget::OnErrorOccurred );
+    connect( ressourcesManager_.get(),
+             &RessourcesManager::RessourcesLoadingMainStepChanged,
+             dataLoadingWidget,
+             &DataLoadingWidget::OnMainDataLoadingStepChanged,
+             Qt::QueuedConnection );
+    connect( ressourcesManager_.get(),
+             &RessourcesManager::RessourcesLoadingSubStepChanged,
+             dataLoadingWidget,
+             &DataLoadingWidget::OnSubDataLoadingStepChanged,
+             Qt::QueuedConnection );
+    connect( ressourcesManager_.get(),
+             &RessourcesManager::ErrorOccured,
+             dataLoadingWidget,
+             &DataLoadingWidget::OnErrorOccurred,
+             Qt::QueuedConnection );
 
-    connect( dataLoadingThread_, &QThread::started, dataLoader, &DataLoader::StartDataLoading );
+    connect( dataLoadingThread_, &QThread::started, ressourcesManager_.get(), &RessourcesManager::LoadRessources );
     dataLoadingThread_->start();
 }

@@ -11,7 +11,11 @@ SpaceInEmptyParentheses: false
 BreakBeforeBraces: Allman
 AllowShortFunctionsOnASingleLine: None
 AllowShortBlocksOnASingleLine: Never
-BreakConstructorInitializers: BeforeComma # leading-comma style
+BreakConstructorInitializers: BeforeComma
 ConstructorInitializerIndentWidth: 4
 PackConstructorInitializers: Never
 AccessModifierOffset: -4
+BreakTemplateDeclarations: true
+BinPackArguments: false
+BinPackParameters: false
+AllowAllParametersOfDeclarationOnNextLine: false
