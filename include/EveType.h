@@ -15,6 +15,7 @@ public:
     void FromJsonObject( const QJsonObject& jsonData ) override;
     QJsonObject ToJsonObject() const override;
 
+    std::string GetName() const;
     unsigned int GetTypeId() const;
     unsigned int GetGroupId() const;
     unsigned int GetCategoryId() const;

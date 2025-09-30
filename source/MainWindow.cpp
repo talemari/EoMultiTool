@@ -169,6 +169,10 @@ void MainWindow::BuildBaseInterface()
     sideMenu_->hide();
 }
 
+void MainWindow::OnDataLoadingFinished()
+{
+}
+
 void MainWindow::StartDataLoading()
 {
     DataLoadingWidget* dataLoadingWidget = new DataLoadingWidget;

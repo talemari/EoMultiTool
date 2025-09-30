@@ -69,6 +69,11 @@ QJsonObject EveType::ToJsonObject() const
     return obj;
 }
 
+std::string EveType::GetName() const
+{
+    return name_;
+}
+
 unsigned int EveType::GetTypeId() const
 {
     return typeId_;

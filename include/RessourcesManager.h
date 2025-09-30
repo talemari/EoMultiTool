@@ -28,6 +28,12 @@ public:
     RessourcesManager( const RessourcesManager& ) = delete;
     RessourcesManager& operator=( const RessourcesManager& ) = delete;
 
+    const std::unordered_map< tTypeId, std::shared_ptr< EveType > >& GetTypesMap() const;
+    const std::unordered_map< tTypeId, std::shared_ptr< Blueprint > >& GetBlueprintsMap() const;
+    const std::unordered_map< tTypeId, std::shared_ptr< Ore > >& GetOresMap() const;
+
+    const std::shared_ptr< EveType > GetTypeById( tTypeId typeId ) const;
+
 public slots:
     void LoadRessources();
 

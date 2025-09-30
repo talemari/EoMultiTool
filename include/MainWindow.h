@@ -43,6 +43,9 @@ private:
     void BuildBaseInterface();
     void StartDataLoading();
 
+private slots:
+    void OnDataLoadingFinished();
+
 signals:
     void ClickedOnWindow();
 

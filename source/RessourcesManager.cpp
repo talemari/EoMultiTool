@@ -44,6 +44,26 @@ RessourcesManager::RessourcesManager( QSettings& settings, QObject* parent )
 {
 }
 
+const std::unordered_map< tTypeId, std::shared_ptr< EveType > >& RessourcesManager::GetTypesMap() const
+{
+    return types_;
+}
+
+const std::unordered_map< tTypeId, std::shared_ptr< Blueprint > >& RessourcesManager::GetBlueprintsMap() const
+{
+    return blueprints_;
+}
+
+const std::unordered_map< tTypeId, std::shared_ptr< Ore > >& RessourcesManager::GetOresMap() const
+{
+    return ores_;
+}
+
+const std::shared_ptr< EveType > RessourcesManager::GetTypeById( tTypeId typeId ) const
+{
+    return types_.at( typeId );
+}
+
 void RessourcesManager::LoadRessources()
 {
     if ( QFile::exists( BINARY_TYPES_FILEPATH_ ) && QFile::exists( BINARY_BLUEPRINTS_FILEPATH_ ) && QFile::exists( BINARY_ORES_FILEPATH_ ) )
