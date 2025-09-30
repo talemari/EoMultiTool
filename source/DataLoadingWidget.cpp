@@ -1,4 +1,5 @@
 #include "DataLoadingWidget.h"
+#include "LogManager.h"
 
 #include <QLabel>
 #include <QProgressBar>
@@ -35,6 +36,7 @@ void DataLoadingWidget::OnSubDataLoadingStepChanged( int currentStep, int maxSte
 
 void DataLoadingWidget::OnErrorOccurred( const QString& errorMessage )
 {
+    LOG_WARNING( "Error occured : {}", errorMessage.toStdString() );
     mainProgressLabel_->setText( errorMessage );
     mainProgressBar_->hide();
     subProgressBar_->hide();

@@ -41,7 +41,7 @@ add_executable(EoMultiTool
 include(GNUInstallDirs)
 include(FetchContent)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build static libs" FORCE)
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network Core5Compat)
 
 FetchContent_Declare(
   zlib
@@ -113,7 +113,7 @@ elseif (WIN32 AND TARGET Qt6::qmake) # multi-config (Visual Studio)
     endforeach()
 endif()
 
-target_link_libraries(EoMultiTool PRIVATE Qt6::Widgets Qt6::Network zip yaml-cpp)
+target_link_libraries(EoMultiTool PRIVATE Qt6::Widgets Qt6::Network Qt6::Core5Compat zip yaml-cpp)
 qt_generate_deploy_app_script(
   TARGET EoMultiTool
   OUTPUT_SCRIPT deploy_script

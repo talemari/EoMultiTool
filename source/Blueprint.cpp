@@ -20,10 +20,61 @@ void Blueprint::FromJsonObject( const QJsonObject& jsonData )
             ParseManufacturingJob( activitiesObj.value( "manufacturing" ).toObject() );
         }
         else
+        {
             LOG_WARNING( "Blueprint id {} does not contain manufacturing job data.", typeId_ );
+            return;
+        }
     }
     if ( !manufacturingJob_.isValid )
+    {
         LOG_WARNING( "Blueprint id {}'s manufacturing job is invalid", typeId_ );
+        return;
+    }
+    isValid_ = true;
+}
+
+QJsonObject Blueprint::ToJsonObject() const
+{
+    QJsonObject obj;
+
+    if ( !manufacturingJob_.isValid )
+        return QJsonObject();
+
+    obj[ "_key" ] = QString::number( typeId_ );
+    QJsonObject activitiesObj;
+    QJsonObject manufacturingObj;
+
+    manufacturingObj[ "time" ] = QString::number( manufacturingJob_.timeInSeconds );
+
+    QJsonArray materialsArray;
+    for ( const auto& matReq : manufacturingJob_.matRequirements )
+    {
+        QJsonObject matObj;
+        matObj[ "typeID" ] = QString::number( matReq.item );
+        matObj[ "quantity" ] = QString::number( matReq.quantity );
+        materialsArray.append( matObj );
+    }
+    manufacturingObj[ "materials" ] = materialsArray;
+
+    QJsonArray productsArray;
+    for ( const auto& product : manufacturingJob_.manufacturedProducts )
+    {
+        QJsonObject prodObj;
+        prodObj[ "typeID" ] = QString::number( product.item );
+        prodObj[ "quantity" ] = QString::number( product.quantity );
+        productsArray.append( prodObj );
+    }
+    manufacturingObj[ "products" ] = productsArray;
+
+    activitiesObj[ "manufacturing" ] = manufacturingObj;
+    obj[ "activities" ] = activitiesObj;
+
+    return obj;
+}
+
+ManufacturingJob Blueprint::GetManufacturingJob() const
+{
+    return manufacturingJob_;
 }
 
 void Blueprint::ParseManufacturingJob( const QJsonObject& jsonData )

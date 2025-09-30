@@ -1,7 +1,11 @@
 #include "RessourcesManager.h"
 #include "EveType.h"
+#include "HelperFunctions.h"
 #include "LogManager.h"
+#include "Ore.h"
 
+#include <QBinaryJson>
+#include <QCoreapplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -11,6 +15,10 @@
 
 static constexpr const char* TYPES_JSONL = "types.jsonl";
 static constexpr const char* BLUEPRINTS_JSONL = "blueprints.jsonl";
+static constexpr const char* TYPEMATERIALS_JSONL = "typeMaterials.jsonl";
+static constexpr const char* GROUPS_JSONL = "groups.jsonl";
+static constexpr unsigned int ORES_CATEGORY_ID = 25;
+
 static constexpr std::array< const char*, static_cast< int >( eDataLoadingSteps::Count ) > currentDataLoadingStep = {
     "Waiting...",
     "Downloading SDE...",
@@ -19,31 +27,30 @@ static constexpr std::array< const char*, static_cast< int >( eDataLoadingSteps:
     "Loading Jsonl files...",
     "Loading types...",
     "Loading blueprints...",
-    "Building ores table...",
-    "Loading attributes...",
-    "Loading dogma attributes...",
+    "Loading ores...",
+    "Filtering irrelevant data...",
+    "Saving filtered json...",
     "Finalizing..." };
-
-unsigned int GetNumberOfLinesInFile( QFile& file )
-{
-    unsigned int lineCount = 0;
-    while ( !file.atEnd() )
-    {
-        file.readLine();
-        ++lineCount;
-    }
-    file.seek( 0 );
-    return lineCount;
-}
 
 RessourcesManager::RessourcesManager( QObject* parent )
     : QObject( parent )
     , dataLoader_( std::make_unique< DataLoader >() )
+    , BINARY_DATA_DIRECTORY_PATH_( QCoreApplication::applicationDirPath() + "/ressources/generated/data/" )
+    , BINARY_TYPES_FILEPATH_( BINARY_DATA_DIRECTORY_PATH_ + "types.bin" )
+    , BINARY_BLUEPRINTS_FILEPATH_( BINARY_DATA_DIRECTORY_PATH_ + "blueprints.bin" )
+    , BINARY_ORES_FILEPATH_( BINARY_DATA_DIRECTORY_PATH_ + "ores.bin" )
 {
 }
 
 void RessourcesManager::LoadRessources()
 {
+    if ( QFile::exists( BINARY_TYPES_FILEPATH_ ) && QFile::exists( BINARY_BLUEPRINTS_FILEPATH_ ) && QFile::exists( BINARY_ORES_FILEPATH_ ) )
+    {
+        LoadMapsFromBinaryFiles();
+        LOG_NOTICE( "Loaded ressources from binary files." );
+        return;
+    }
+
     connect( dataLoader_.get(), &DataLoader::MainDataLoadingStepChanged, this, &RessourcesManager::SetLoadingStep );
     connect( dataLoader_.get(), &DataLoader::SubDataLoadingStepChanged, this, &RessourcesManager::RessourcesLoadingSubStepChanged );
     connect( dataLoader_.get(), &DataLoader::ErrorOccurred, this, &RessourcesManager::ErrorOccured );
@@ -61,96 +68,19 @@ void RessourcesManager::SetLoadingStep( eDataLoadingSteps step )
 void RessourcesManager::LoadSdeData( const QString& extractedSdePath )
 {
     dataLoader_->deleteLater();
-    if ( !BuildTypesMap( extractedSdePath + TYPES_JSONL ) )
+    if ( !BuildMapFromJsonlFile< EveType >( extractedSdePath + TYPES_JSONL, types_, eDataLoadingSteps::LoadingTypes ) )
         return;
-    if ( !BuildBlueprintsMap( extractedSdePath + BLUEPRINTS_JSONL ) )
+    if ( !BuildMapFromJsonlFile< Blueprint >( extractedSdePath + BLUEPRINTS_JSONL, blueprints_, eDataLoadingSteps::LoadingBlueprints ) )
         return;
+    if ( !BuildMapFromJsonlFile< Ore >( extractedSdePath + TYPEMATERIALS_JSONL, ores_, eDataLoadingSteps::LoadingOres ) )
+        return;
+    FilterIrrelevantData( extractedSdePath + GROUPS_JSONL );
+    SaveToBinaryFile();
+
     isRessourcesReady_ = true;
 }
 
-bool RessourcesManager::BuildTypesMap( const QString& typesFilePath )
-{
-    SetLoadingStep( eDataLoadingSteps::LoadingTypes );
-    QFile typesFile;
-    if ( !OpenFile( typesFilePath, typesFile ) )
-        return false;
-
-    unsigned int totalLines = GetNumberOfLinesInFile( typesFile );
-    unsigned int currentLine = 0;
-    double lastPercentageProgression = 0.0;
-    while ( !typesFile.atEnd() )
-    {
-        QByteArray line = typesFile.readLine();
-        QJsonParseError parseError;
-        QJsonDocument doc = QJsonDocument::fromJson( line, &parseError );
-        if ( parseError.error != QJsonParseError::NoError )
-        {
-            emit ErrorOccured( tr( "Failed to parse JSON in %1: %2" ).arg( typesFile.fileName(), parseError.errorString() ) );
-            return false;
-        }
-        if ( !doc.isObject() )
-        {
-            emit ErrorOccured( tr( "Expected JSON object in %1" ).arg( typesFile.fileName() ) );
-            return false;
-        }
-        QJsonObject obj = doc.object();
-        if ( obj.value( "published" ).toBool() == true )
-            types_[ obj.value( "_key" ).toInt() ] = std::make_shared< EveType >( EveType( obj ) );
-
-        double percentageProgression = ( static_cast< double >( ++currentLine ) / static_cast< double >( totalLines ) ) * 100.0;
-        if ( percentageProgression - lastPercentageProgression > 1.0 )
-        {
-            emit RessourcesLoadingSubStepChanged(
-                currentLine, totalLines, tr( "Loading types... %1%" ).arg( static_cast< int >( percentageProgression ) ) );
-            lastPercentageProgression = percentageProgression;
-        }
-    }
-    return true;
-}
-
-bool RessourcesManager::BuildBlueprintsMap( const QString& blueprintsFilePath )
-{
-    SetLoadingStep( eDataLoadingSteps::LoadingBlueprints );
-    QFile blueprintsFile;
-    if ( !OpenFile( blueprintsFilePath, blueprintsFile ) )
-        return false;
-    unsigned int totalLines = GetNumberOfLinesInFile( blueprintsFile );
-    unsigned int currentLine = 0;
-    double lastPercentageProgression = 0.0;
-    while ( !blueprintsFile.atEnd() )
-    {
-        QByteArray line = blueprintsFile.readLine();
-        QJsonParseError parseError;
-        QJsonDocument doc = QJsonDocument::fromJson( line, &parseError );
-
-        if ( parseError.error != QJsonParseError::NoError )
-        {
-            emit ErrorOccured( tr( "Failed to parse JSON in %1: %2" ).arg( blueprintsFile.fileName(), parseError.errorString() ) );
-            return false;
-        }
-        if ( !doc.isObject() )
-        {
-            emit ErrorOccured( tr( "Expected JSON object in %1" ).arg( blueprintsFile.fileName() ) );
-            return false;
-        }
-
-        QJsonObject obj = doc.object();
-        tTypeId blueprintTypeId = obj.value( "_key" ).toInt();
-        if ( types_.contains( blueprintTypeId ) )
-            blueprints_[ blueprintTypeId ] = std::make_shared< Blueprint >( Blueprint( obj ) );
-
-        double percentageProgression = ( static_cast< double >( ++currentLine ) / static_cast< double >( totalLines ) ) * 100.0;
-        if ( percentageProgression - lastPercentageProgression > 1.0 || currentLine >= totalLines )
-        {
-            QString msg = tr( "Loading blueprints... %1%" ).arg( static_cast< int >( percentageProgression ) );
-            emit RessourcesLoadingSubStepChanged( currentLine, totalLines, msg );
-            lastPercentageProgression = percentageProgression;
-        }
-    }
-    return true;
-}
-
-bool RessourcesManager::OpenFile( const QString& filePath, QFile& outFile )
+bool RessourcesManager::OpenFile( const QString& filePath, QFile& outFile, bool isBinary )
 {
     outFile.setFileName( QDir::cleanPath( filePath ) );
     QFileInfo info( outFile );
@@ -160,10 +90,287 @@ bool RessourcesManager::OpenFile( const QString& filePath, QFile& outFile )
         emit ErrorOccured( tr( "Could not find file %1" ).arg( info.absoluteFilePath() ) );
         return false;
     }
-    if ( !outFile.open( QIODevice::ReadOnly | QIODevice::Text ) )
+    QIODevice::OpenMode mode = isBinary ? QIODevice::ReadOnly : ( QIODevice::ReadOnly | QIODevice::Text );
+    if ( !outFile.open( mode ) )
     {
         emit ErrorOccured( tr( "Failed to open %1" ).arg( info.absoluteFilePath() ) );
         return false;
     }
     return true;
 }
+
+void RessourcesManager::RemoveNonOreMaterials( const QString& groupFilePath )
+{
+    QFile jsonFile;
+    QFileInfo info( jsonFile );
+    if ( !OpenFile( groupFilePath, jsonFile, false ) )
+    {
+        emit ErrorOccured( tr( "Could not open %1 to filter ores." ).arg( info.absolutePath() ) );
+        return;
+    }
+    std::unordered_set< tTypeId > validOreGroupTypeIds;
+    while ( !jsonFile.atEnd() )
+    {
+        QByteArray line = jsonFile.readLine();
+        QJsonParseError parseError;
+        QJsonDocument doc = QJsonDocument::fromJson( line, &parseError );
+        if ( parseError.error != QJsonParseError::NoError )
+        {
+            emit ErrorOccured( tr( "Failed to parse JSON in %1: %2" ).arg( jsonFile.fileName(), parseError.errorString() ) );
+            return;
+        }
+        if ( !doc.isObject() )
+        {
+            emit ErrorOccured( tr( "Expected JSON object in %1" ).arg( jsonFile.fileName() ) );
+            return;
+        }
+        QJsonObject obj = doc.object();
+        tTypeId groupId = obj.value( "_key" ).toInt();
+        tTypeId categoryId = obj.value( "categoryID" ).toInt();
+        if ( categoryId == ORES_CATEGORY_ID )
+            validOreGroupTypeIds.insert( groupId );
+    }
+    unsigned int removedCount = 0;
+    for ( auto it = ores_.begin(); it != ores_.end(); )
+    {
+        tTypeId typeId = it->second->GetTypeId();
+        if ( !types_.at( typeId ) )
+        {
+            LOG_WARNING( "Ore with typeId {} has no corresponding EveType, removing from ores list.", typeId );
+            it = ores_.erase( it );
+            continue;
+        }
+        unsigned int groupId = types_.at( typeId )->GetGroupId();
+        if ( validOreGroupTypeIds.find( groupId ) == validOreGroupTypeIds.end() )
+        {
+            it = ores_.erase( it );
+            removedCount++;
+        }
+        else
+            ++it;
+    }
+    LOG_NOTICE( "Removed {} non-ore materials from ores list, leaving {} ores", removedCount, ores_.size() );
+}
+
+void RessourcesManager::FilterIrrelevantData( const QString& groupFilepath )
+{
+    SetLoadingStep( eDataLoadingSteps::FilteringIrrelevantData );
+    static constexpr unsigned int PROGRESS_TOTAL_STEPS = 3;
+    std::unordered_map< tTypeId, std::shared_ptr< EveType > > types;
+    std::unordered_set< tTypeId > relevantTypeIds;
+
+    emit RessourcesLoadingSubStepChanged( 0, PROGRESS_TOTAL_STEPS, "Identifying relevant blueprints and materials..." );
+    unsigned int removedBlueprints = 0;
+    for ( const auto& [ blueprintId, blueprint ] : blueprints_ )
+    {
+        ManufacturingJob job = blueprint->GetManufacturingJob();
+        if ( !job.isValid )
+        {
+            removedBlueprints++;
+            continue;
+        }
+
+        relevantTypeIds.insert( blueprintId );
+        for ( const auto& product : job.manufacturedProducts )
+        {
+            relevantTypeIds.insert( product.item );
+        }
+        for ( const auto& matReq : job.matRequirements )
+        {
+            relevantTypeIds.insert( matReq.item );
+        }
+    }
+    emit RessourcesLoadingSubStepChanged( 1, PROGRESS_TOTAL_STEPS, "Filtering Non ore materials..." );
+    RemoveNonOreMaterials( groupFilepath );
+    emit RessourcesLoadingSubStepChanged( 2, PROGRESS_TOTAL_STEPS, "Building filtered types list..." );
+    for ( const auto& typeId : relevantTypeIds )
+    {
+        if ( types_.find( typeId ) != types_.end() )
+            types.insert( { typeId, types_.at( typeId ) } );
+    }
+    types_.clear();
+    types_ = std::move( types );
+}
+
+bool RessourcesManager::SaveToBinaryFile()
+{
+    SetLoadingStep( eDataLoadingSteps::SavingFilteredJson );
+    static constexpr unsigned int PROGRESS_TOTAL_STEPS = 3;
+    emit RessourcesLoadingSubStepChanged( 0, PROGRESS_TOTAL_STEPS, "Saving types..." );
+
+    QDir dir;
+    QFileInfo fileInfo( BINARY_DATA_DIRECTORY_PATH_ );
+    if ( !dir.mkpath( fileInfo.absolutePath() ) )
+    {
+        emit ErrorOccured( tr( "Could not create directory %1 to save filtered data." ).arg( fileInfo.absolutePath() ) );
+        return false;
+    }
+
+    QJsonObject typesJson = GetJsonFromMap( types_ );
+    if ( !SaveJsonObjectToBinaryFile( typesJson, BINARY_TYPES_FILEPATH_ ) )
+        return false;
+
+    emit RessourcesLoadingSubStepChanged( 1, PROGRESS_TOTAL_STEPS, "Saving blueprints..." );
+    QJsonObject blueprintsJson = GetJsonFromMap( blueprints_ );
+    if ( !SaveJsonObjectToBinaryFile( blueprintsJson, BINARY_BLUEPRINTS_FILEPATH_ ) )
+        return false;
+
+    emit RessourcesLoadingSubStepChanged( 2, PROGRESS_TOTAL_STEPS, "Saving ores..." );
+    QJsonObject oresJson = GetJsonFromMap( ores_ );
+    if ( !SaveJsonObjectToBinaryFile( oresJson, BINARY_ORES_FILEPATH_ ) )
+        return false;
+
+    return true;
+}
+
+bool RessourcesManager::SaveJsonObjectToBinaryFile( const QJsonObject& jsonObject, const QString& binaryFilepath )
+{
+    LOG_NOTICE( "Saving {} elements to {}", jsonObject.size(), binaryFilepath.toStdString() );
+    QFile file( binaryFilepath );
+    if ( !file.open( QIODevice::WriteOnly ) )
+    {
+        emit ErrorOccured( tr( "Could not save map to %1" ).arg( binaryFilepath ) );
+        return false;
+    }
+
+    QJsonDocument doc( jsonObject );
+    QByteArray data = QBinaryJson::toBinaryData( doc );
+
+    qint64 bytesWritten = file.write( data );
+    if ( bytesWritten != data.size() )
+    {
+        emit ErrorOccured( tr( "Failed to write all data to file %1" ).arg( binaryFilepath ) );
+        return false;
+    }
+
+    file.close();
+    return true;
+}
+
+bool RessourcesManager::LoadMapsFromBinaryFiles()
+{
+    SetLoadingStep( eDataLoadingSteps::Finalizing );
+    static constexpr unsigned int PROGRESS_TOTAL_STEPS = 3;
+    emit RessourcesLoadingSubStepChanged( 0, PROGRESS_TOTAL_STEPS, "Loading types from binary files..." );
+    if ( !BuildMapFromBinaryFile< EveType >( BINARY_TYPES_FILEPATH_, types_ ) )
+        return false;
+    emit RessourcesLoadingSubStepChanged( 1, PROGRESS_TOTAL_STEPS, "Loading blueprints from binary files..." );
+    if ( !BuildMapFromBinaryFile< Blueprint >( BINARY_BLUEPRINTS_FILEPATH_, blueprints_ ) )
+        return false;
+    emit RessourcesLoadingSubStepChanged( 2, PROGRESS_TOTAL_STEPS, "Loading ores from binary files..." );
+    if ( !BuildMapFromBinaryFile< Ore >( BINARY_ORES_FILEPATH_, ores_ ) )
+        return false;
+    isRessourcesReady_ = true;
+    emit RessourcesReady();
+    emit RessourcesLoadingSubStepChanged( PROGRESS_TOTAL_STEPS, PROGRESS_TOTAL_STEPS, "Done." );
+    return true;
+}
+
+template < JsonEveChild T >
+QJsonObject RessourcesManager::GetJsonFromMap( const std::unordered_map< tTypeId, std::shared_ptr< T > >& map ) const
+{
+    QJsonObject result;
+    for ( const auto& [ typeId, element ] : map )
+    {
+        QJsonObject elementObj = element->ToJsonObject();
+        if ( elementObj.contains( "_key" ) )
+            result[ QString::number( typeId ) ] = element->ToJsonObject();
+    }
+    return result;
+}
+
+template < JsonEveChild T >
+bool RessourcesManager::BuildMapFromBinaryFile( const QString& filePath, std::unordered_map< tTypeId, std::shared_ptr< T > >& targetMap )
+{
+    QFile binFile;
+    if ( !OpenFile( filePath, binFile, true ) )
+        return false;
+    QJsonDocument jsonDoc = QBinaryJson::fromBinaryData( binFile.readAll() );
+    if ( jsonDoc.isNull() || !jsonDoc.isObject() )
+    {
+        emit ErrorOccured( tr( "Failed to parse binary json from %1" ).arg( binFile.fileName() ) );
+        return false;
+    }
+    QJsonObject jsonobject = jsonDoc.object();
+    LOG_NOTICE( "Loading {} elements from {}", jsonobject.size(), binFile.fileName().toStdString() );
+    for ( const QString& key : jsonobject.keys() )
+    {
+        QJsonObject elementObj = jsonobject.value( key ).toObject();
+        tTypeId elementTypeId = key.toInt();
+        std::shared_ptr< T > element = std::make_shared< T >( elementObj );
+        if ( element->IsValid() )
+            targetMap[ elementTypeId ] = element;
+        else
+            LOG_WARNING( "Element with typeId {} in file {} is not valid, skipping.", elementTypeId, binFile.fileName().toStdString() );
+    }
+    return true;
+}
+
+template < JsonEveChild T >
+inline bool RessourcesManager::BuildMapFromJsonlFile( const QString& filePath,
+                                                      std::unordered_map< tTypeId, std::shared_ptr< T > >& targetMap,
+                                                      eDataLoadingSteps step )
+{
+    SetLoadingStep( step );
+    QFile jsonFile;
+    if ( !OpenFile( filePath, jsonFile, false ) )
+        return false;
+    unsigned int totalLines = GetNumberOfLinesInFile( jsonFile );
+    unsigned int currentLine = 0;
+    double lastPercentageProgression = 0.0;
+    while ( !jsonFile.atEnd() )
+    {
+        QByteArray line = jsonFile.readLine();
+        QJsonParseError parseError;
+        QJsonDocument doc = QJsonDocument::fromJson( line, &parseError );
+
+        if ( parseError.error != QJsonParseError::NoError )
+        {
+            emit ErrorOccured( tr( "Failed to parse JSON in %1: %2" ).arg( jsonFile.fileName(), parseError.errorString() ) );
+            return false;
+        }
+        if ( !doc.isObject() )
+        {
+            emit ErrorOccured( tr( "Expected JSON object in %1" ).arg( jsonFile.fileName() ) );
+            return false;
+        }
+
+        QJsonObject obj = doc.object();
+        tTypeId elementTypeId = obj.value( "_key" ).toInt();
+        std::shared_ptr< T > element = std::make_shared< T >( obj );
+        if ( element->IsValid() )
+            targetMap[ elementTypeId ] = element;
+
+        double percentageProgression = ( static_cast< double >( ++currentLine ) / static_cast< double >( totalLines ) ) * 100.0;
+        if ( percentageProgression - lastPercentageProgression > 1.0 || currentLine >= totalLines )
+        {
+            QString msg = tr( "Loading %1... %2%" ).arg( jsonFile.fileName() ).arg( static_cast< int >( percentageProgression ) );
+            emit RessourcesLoadingSubStepChanged( currentLine, totalLines, msg );
+            lastPercentageProgression = percentageProgression;
+        }
+    }
+    return true;
+}
+
+template bool RessourcesManager::BuildMapFromJsonlFile< EveType >( const QString&,
+                                                                   std::unordered_map< tTypeId, std::shared_ptr< EveType > >&,
+                                                                   eDataLoadingSteps );
+template bool RessourcesManager::BuildMapFromJsonlFile< Blueprint >( const QString&,
+                                                                     std::unordered_map< tTypeId, std::shared_ptr< Blueprint > >&,
+                                                                     eDataLoadingSteps );
+template bool RessourcesManager::BuildMapFromJsonlFile< Ore >( const QString&,
+                                                               std::unordered_map< tTypeId, std::shared_ptr< Ore > >&,
+                                                               eDataLoadingSteps );
+
+template QJsonObject RessourcesManager::GetJsonFromMap< EveType >( const std::unordered_map< tTypeId, std::shared_ptr< EveType > >& ) const;
+template QJsonObject
+RessourcesManager::GetJsonFromMap< Blueprint >( const std::unordered_map< tTypeId, std::shared_ptr< Blueprint > >& ) const;
+template QJsonObject RessourcesManager::GetJsonFromMap< Ore >( const std::unordered_map< tTypeId, std::shared_ptr< Ore > >& ) const;
+
+template bool RessourcesManager::BuildMapFromBinaryFile< EveType >( const QString& filePath,
+                                                                    std::unordered_map< tTypeId, std::shared_ptr< EveType > >& targetMap );
+template bool
+RessourcesManager::BuildMapFromBinaryFile< Blueprint >( const QString& filePath,
+                                                        std::unordered_map< tTypeId, std::shared_ptr< Blueprint > >& targetMap );
+template bool RessourcesManager::BuildMapFromBinaryFile< Ore >( const QString& filePath,
+                                                                std::unordered_map< tTypeId, std::shared_ptr< Ore > >& targetMap );

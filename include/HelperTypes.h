@@ -9,14 +9,6 @@ struct WithQuantity
     unsigned int quantity = 0;
 };
 
-struct Ore
-{
-    tTypeId typeId;
-    double volumePerUnit = 0.0;
-    int basePricePerUnit = 0.0;
-    std::vector< WithQuantity< tTypeId > > refinedProducts;
-};
-
 enum class eDataLoadingSteps
 {
     Waiting,
@@ -26,9 +18,9 @@ enum class eDataLoadingSteps
     LoadingJsonlFiles,
     LoadingTypes,
     LoadingBlueprints,
-    LoadingAttributes,
-    LoadingDogmaAttributes,
-    LoadingDogmaEffects,
+    LoadingOres,
+    FilteringIrrelevantData,
+    SavingFilteredJson,
     Finalizing,
     Count
 };
