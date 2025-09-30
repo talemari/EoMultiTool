@@ -12,6 +12,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
+#include <QSettings>
 
 static constexpr const char* TYPES_JSONL = "types.jsonl";
 static constexpr const char* BLUEPRINTS_JSONL = "blueprints.jsonl";
@@ -32,8 +33,9 @@ static constexpr std::array< const char*, static_cast< int >( eDataLoadingSteps:
     "Saving filtered json...",
     "Finalizing..." };
 
-RessourcesManager::RessourcesManager( QObject* parent )
+RessourcesManager::RessourcesManager( QSettings& settings, QObject* parent )
     : QObject( parent )
+    , settings_( settings )
     , dataLoader_( std::make_unique< DataLoader >() )
     , BINARY_DATA_DIRECTORY_PATH_( QCoreApplication::applicationDirPath() + "/ressources/generated/data/" )
     , BINARY_TYPES_FILEPATH_( BINARY_DATA_DIRECTORY_PATH_ + "types.bin" )
@@ -46,9 +48,15 @@ void RessourcesManager::LoadRessources()
 {
     if ( QFile::exists( BINARY_TYPES_FILEPATH_ ) && QFile::exists( BINARY_BLUEPRINTS_FILEPATH_ ) && QFile::exists( BINARY_ORES_FILEPATH_ ) )
     {
-        LoadMapsFromBinaryFiles();
-        LOG_NOTICE( "Loaded ressources from binary files." );
-        return;
+        if ( !LoadMapsFromBinaryFiles() )
+            LOG_WARNING( "Failed to load ressources from binary files, falling back to JSON." );
+        else
+        {
+            isRessourcesReady_ = true;
+            LOG_NOTICE( "Loaded ressources from binary files." );
+            emit RessourcesReady();
+            return;
+        }
     }
 
     connect( dataLoader_.get(), &DataLoader::MainDataLoadingStepChanged, this, &RessourcesManager::SetLoadingStep );
@@ -244,6 +252,7 @@ bool RessourcesManager::SaveJsonObjectToBinaryFile( const QJsonObject& jsonObjec
     }
 
     file.close();
+    settings_.setValue( "StaticData/" + binaryFilepath + "TotalElements", jsonObject.size() );
     return true;
 }
 
@@ -264,6 +273,25 @@ bool RessourcesManager::LoadMapsFromBinaryFiles()
     emit RessourcesReady();
     emit RessourcesLoadingSubStepChanged( PROGRESS_TOTAL_STEPS, PROGRESS_TOTAL_STEPS, "Done." );
     return true;
+}
+
+unsigned int RessourcesManager::GetNumberOfLinesInFile( QFile& file )
+{
+    unsigned int lineCount = 0;
+    if ( settings_.contains( "StaticData/" + file.fileName() + "TotalLines" ) )
+    {
+        LOG_NOTICE( "Using cached line count for file {}", file.fileName().toStdString() );
+        return settings_.value( "StaticData/" + file.fileName() + "TotalLines" ).toUInt();
+    }
+
+    while ( !file.atEnd() )
+    {
+        file.readLine();
+        ++lineCount;
+    }
+    file.seek( 0 );
+    settings_.setValue( "StaticData/" + file.fileName() + "TotalLines", lineCount );
+    return lineCount;
 }
 
 template < JsonEveChild T >
@@ -293,13 +321,25 @@ bool RessourcesManager::BuildMapFromBinaryFile( const QString& filePath, std::un
     }
     QJsonObject jsonobject = jsonDoc.object();
     LOG_NOTICE( "Loading {} elements from {}", jsonobject.size(), binFile.fileName().toStdString() );
+    unsigned int currentElement = 0;
+    double lastPercentageProgression = 0.0;
     for ( const QString& key : jsonobject.keys() )
     {
         QJsonObject elementObj = jsonobject.value( key ).toObject();
         tTypeId elementTypeId = key.toInt();
         std::shared_ptr< T > element = std::make_shared< T >( elementObj );
         if ( element->IsValid() )
+        {
             targetMap[ elementTypeId ] = element;
+            double percentageProgression =
+                ( static_cast< double >( ++currentElement ) / static_cast< double >( jsonobject.size() ) ) * 100.0;
+            if ( percentageProgression - lastPercentageProgression > 1.0 || currentElement >= jsonobject.size() )
+            {
+                QString msg = tr( "Loading %1... %2%" ).arg( filePath ).arg( static_cast< int >( percentageProgression ) );
+                emit RessourcesLoadingSubStepChanged( currentElement, jsonobject.size(), msg );
+                lastPercentageProgression = percentageProgression;
+            }
+        }
         else
             LOG_WARNING( "Element with typeId {} in file {} is not valid, skipping.", elementTypeId, binFile.fileName().toStdString() );
     }

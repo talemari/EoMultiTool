@@ -3,6 +3,7 @@
 #include <unordered_map>
 
 #include <QMainWindow>
+#include <QSettings>
 #include <QTimer>
 
 class QLabel;
@@ -59,4 +60,5 @@ private:
     QStringList activeStylesheets_;
     QThread* dataLoadingThread_;
     std::shared_ptr< RessourcesManager > ressourcesManager_;
+    QSettings settings_;
 };

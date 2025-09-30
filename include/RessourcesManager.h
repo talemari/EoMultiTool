@@ -10,6 +10,7 @@
 
 class QFile;
 class QJsonObject;
+class QSettings;
 class EveType;
 class Ore;
 
@@ -21,7 +22,7 @@ class RessourcesManager : public QObject
     Q_OBJECT
 
 public:
-    RessourcesManager( QObject* parent = nullptr );
+    RessourcesManager( QSettings& settings, QObject* parent = nullptr );
     ~RessourcesManager() override = default;
 
     RessourcesManager( const RessourcesManager& ) = delete;
@@ -55,11 +56,13 @@ private:
 
     template < JsonEveChild T >
     bool BuildMapFromBinaryFile( const QString& filePath, std::unordered_map< tTypeId, std::shared_ptr< T > >& targetMap );
+    unsigned int GetNumberOfLinesInFile( QFile& file );
 
 private slots:
     void LoadSdeData( const QString& extractedSdePath );
 
 private:
+    QSettings& settings_;
     std::unordered_map< tTypeId, std::shared_ptr< EveType > > types_;
     std::unordered_map< tTypeId, std::shared_ptr< Blueprint > > blueprints_;
     std::unordered_map< tTypeId, std::shared_ptr< Ore > > ores_;

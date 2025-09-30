@@ -5,6 +5,7 @@
 #include "SideMenu.h"
 
 #include <QApplication>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -24,7 +25,8 @@ MainWindow::MainWindow( const QString& appName, const QString& version, QWidget*
     , centralWidget_( new QWidget )
     , pages_( new QStackedWidget )
     , sideMenu_( new SideMenu )
-    , ressourcesManager_( std::make_shared< RessourcesManager >() )
+    , settings_( QDir( QCoreApplication::applicationDirPath() ).filePath( "settings.ini" ), QSettings::IniFormat )
+    , ressourcesManager_( std::make_shared< RessourcesManager >( settings_ ) )
 {
     app_ = dynamic_cast< QApplication* >( QApplication::instance() );
     installEventFilter( this );
