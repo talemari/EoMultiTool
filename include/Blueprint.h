@@ -25,7 +25,7 @@ public:
     void FromJsonObject( const QJsonObject& jsonData ) override;
     QJsonObject ToJsonObject() const override;
 
-    ManufacturingJob GetManufacturingJob() const;
+    const ManufacturingJob& GetManufacturingJob() const;
 
 private:
     void ParseManufacturingJob( const QJsonObject& jsonData );

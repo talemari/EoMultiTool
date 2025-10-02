@@ -66,3 +66,13 @@ QJsonObject Ore::ToJsonObject() const
 
     return obj;
 }
+
+const std::vector< WithQuantity< tTypeId > >& Ore::GetRefinedProducts() const
+{
+    return refinedProducts_;
+}
+
+double Ore::GetBasePrice() const
+{
+    return 1.0;
+}

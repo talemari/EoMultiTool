@@ -11,6 +11,7 @@ class QScrollArea;
 class QStackedWidget;
 class QVBoxLayout;
 
+class IndustryPage;
 class SideMenu;
 class DataLoadingWidget;
 class RessourcesManager;
@@ -62,6 +63,8 @@ private:
     SideMenu* sideMenu_ = nullptr;
     QStringList activeStylesheets_;
     QThread* dataLoadingThread_;
-    std::shared_ptr< RessourcesManager > ressourcesManager_;
+    std::unique_ptr< RessourcesManager > ressourcesManager_;
     QSettings settings_;
+
+    IndustryPage* industryPage_;
 };

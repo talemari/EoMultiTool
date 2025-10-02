@@ -10,7 +10,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if (CMAKE_GENERATOR MATCHES "Visual Studio")
   set(CMAKE_PREFIX_PATH "C:/Qt/6.9.2/msvc2022_64" CACHE PATH "" FORCE)
   add_compile_options(/Zc:__cplusplus /utf-8 /fsanitize=address)
-  add_link_options(/fsanitize=address)
   add_definitions(-DUNICODE -D_UNICODE)  # optional but typical on Windows
   set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT EoMultiTool)
   set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
@@ -24,8 +23,6 @@ endif()
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
-set(YAML_CPP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(YAML_CPP_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 
 file(GLOB MYAPP_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/source/*.cpp"
@@ -48,28 +45,25 @@ FetchContent_Declare(
   URL https://zlib.net/zlib-1.3.1.tar.gz
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
-FetchContent_MakeAvailable(zlib)
+FetchContent_MakeAvailable(zlib) #Zip compress / extract library
 
 if (NOT TARGET ZLIB::ZLIB)
   add_library(ZLIB::ZLIB ALIAS zlibstatic)
 endif()
 
-FetchContent_Declare(
-  yaml-cpp
-  GIT_REPOSITORY https://github.com/jbeder/yaml-cpp.git
-  GIT_TAG        0.8.0
+FetchContent_Declare( 
+    highs
+    GIT_REPOSITORY https://github.com/ERGO-Code/HiGHS.git
+    GIT_TAG latest
 )
-FetchContent_MakeAvailable(yaml-cpp)
-if (MSVC AND NOT BUILD_SHARED_LIBS)
-  target_compile_definitions(EoMultiTool PRIVATE YAML_CPP_STATIC_DEFINE)
-endif()
+FetchContent_MakeAvailable(highs) #Linear programming library
 
-# Teach find_package(ZLIB) consumers (like libzip) to use THIS zlib
+
 set(ZLIB_USE_STATIC_LIBS ON CACHE BOOL "" FORCE)
 set(ZLIB_INCLUDE_DIR "${zlib_SOURCE_DIR}" CACHE PATH "" FORCE)
 set(ZLIB_LIBRARY "${zlib_BINARY_DIR}/zlibstatic$<$<CONFIG:Debug>:d>.lib" CACHE FILEPATH "" FORCE)
 
-set(LIBZIP_DO_INSTALL OFF CACHE BOOL "" FORCE)     # <- primary switch in recent libzip
+set(LIBZIP_DO_INSTALL OFF CACHE BOOL "" FORCE)
 set(BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(BUILD_REGRESS OFF CACHE BOOL "" FORCE)
 set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
@@ -113,7 +107,7 @@ elseif (WIN32 AND TARGET Qt6::qmake) # multi-config (Visual Studio)
     endforeach()
 endif()
 
-target_link_libraries(EoMultiTool PRIVATE Qt6::Widgets Qt6::Network Qt6::Core5Compat zip yaml-cpp)
+target_link_libraries(EoMultiTool PRIVATE Qt6::Widgets Qt6::Network Qt6::Core5Compat zip highs)
 qt_generate_deploy_app_script(
   TARGET EoMultiTool
   OUTPUT_SCRIPT deploy_script

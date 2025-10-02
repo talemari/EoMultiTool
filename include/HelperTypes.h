@@ -1,12 +1,22 @@
 #pragma once
+#include <memory>
+#include <unordered_map>
 
 typedef unsigned int tTypeId;
+
+template < typename T >
+using TypeIdMap = std::unordered_map< tTypeId, std::shared_ptr< const T > >;
 
 template < typename T >
 struct WithQuantity
 {
     T item;
     unsigned int quantity = 0;
+
+    bool operator<( const WithQuantity& other ) const
+    {
+        return item < other.item;
+    }
 };
 
 enum class eDataLoadingSteps
@@ -15,6 +25,7 @@ enum class eDataLoadingSteps
     DownloadingSde,
     ExtractingSde,
     ValidatingSde,
+    FetchingMarketPrices,
     LoadingJsonlFiles,
     LoadingTypes,
     LoadingBlueprints,

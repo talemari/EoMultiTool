@@ -16,6 +16,9 @@ public:
     void FromJsonObject( const QJsonObject& jsonData );
     QJsonObject ToJsonObject() const override;
 
+    const std::vector< WithQuantity< tTypeId > >& GetRefinedProducts() const;
+    double GetBasePrice() const;
+
 private:
     std::vector< WithQuantity< tTypeId > > refinedProducts_;
 };

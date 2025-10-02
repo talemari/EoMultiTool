@@ -1,5 +1,6 @@
 #include "RessourcesManager.h"
 #include "EveType.h"
+#include "GlobalRessources.h"
 #include "HelperFunctions.h"
 #include "LogManager.h"
 #include "Ore.h"
@@ -44,26 +45,6 @@ RessourcesManager::RessourcesManager( QSettings& settings, QObject* parent )
 {
 }
 
-const std::unordered_map< tTypeId, std::shared_ptr< EveType > >& RessourcesManager::GetTypesMap() const
-{
-    return types_;
-}
-
-const std::unordered_map< tTypeId, std::shared_ptr< Blueprint > >& RessourcesManager::GetBlueprintsMap() const
-{
-    return blueprints_;
-}
-
-const std::unordered_map< tTypeId, std::shared_ptr< Ore > >& RessourcesManager::GetOresMap() const
-{
-    return ores_;
-}
-
-const std::shared_ptr< EveType > RessourcesManager::GetTypeById( tTypeId typeId ) const
-{
-    return types_.at( typeId );
-}
-
 void RessourcesManager::LoadRessources()
 {
     if ( QFile::exists( BINARY_TYPES_FILEPATH_ ) && QFile::exists( BINARY_BLUEPRINTS_FILEPATH_ ) && QFile::exists( BINARY_ORES_FILEPATH_ ) )
@@ -72,9 +53,8 @@ void RessourcesManager::LoadRessources()
             LOG_WARNING( "Failed to load ressources from binary files, falling back to JSON." );
         else
         {
-            isRessourcesReady_ = true;
             LOG_NOTICE( "Loaded ressources from binary files." );
-            emit RessourcesReady();
+            OnRessourcesReady();
             return;
         }
     }
@@ -82,7 +62,7 @@ void RessourcesManager::LoadRessources()
     connect( dataLoader_.get(), &DataLoader::MainDataLoadingStepChanged, this, &RessourcesManager::SetLoadingStep );
     connect( dataLoader_.get(), &DataLoader::SubDataLoadingStepChanged, this, &RessourcesManager::RessourcesLoadingSubStepChanged );
     connect( dataLoader_.get(), &DataLoader::ErrorOccurred, this, &RessourcesManager::ErrorOccured );
-    connect( dataLoader_.get(), &DataLoader::SdeValidated, this, &RessourcesManager::LoadSdeData );
+    connect( dataLoader_.get(), &DataLoader::MarketPricesReady, this, &RessourcesManager::LoadSdeData );
 
     dataLoader_->StartDataLoading();
 }
@@ -93,19 +73,25 @@ void RessourcesManager::SetLoadingStep( eDataLoadingSteps step )
         static_cast< int >( step ), static_cast< int >( eDataLoadingSteps::Count ), currentDataLoadingStep[ static_cast< int >( step ) ] );
 }
 
-void RessourcesManager::LoadSdeData( const QString& extractedSdePath )
+void RessourcesManager::LoadSdeData()
 {
+    QString extractedSdePath = dataLoader_->GetSdeExtractedPath();
+    QJsonObject marketPricesJson = dataLoader_->GetMarketPricesJson();
     dataLoader_->deleteLater();
+
     if ( !BuildMapFromJsonlFile< EveType >( extractedSdePath + TYPES_JSONL, types_, eDataLoadingSteps::LoadingTypes ) )
         return;
     if ( !BuildMapFromJsonlFile< Blueprint >( extractedSdePath + BLUEPRINTS_JSONL, blueprints_, eDataLoadingSteps::LoadingBlueprints ) )
         return;
     if ( !BuildMapFromJsonlFile< Ore >( extractedSdePath + TYPEMATERIALS_JSONL, ores_, eDataLoadingSteps::LoadingOres ) )
         return;
+    SetManufacturableTypes();
     FilterIrrelevantData( extractedSdePath + GROUPS_JSONL );
-    SaveToBinaryFile();
+    AddMarketPricesToTypes( marketPricesJson );
+    if ( !SaveToBinaryFile() )
+        return;
 
-    isRessourcesReady_ = true;
+    OnRessourcesReady();
 }
 
 bool RessourcesManager::OpenFile( const QString& filePath, QFile& outFile, bool isBinary )
@@ -184,7 +170,7 @@ void RessourcesManager::FilterIrrelevantData( const QString& groupFilepath )
 {
     SetLoadingStep( eDataLoadingSteps::FilteringIrrelevantData );
     static constexpr unsigned int PROGRESS_TOTAL_STEPS = 3;
-    std::unordered_map< tTypeId, std::shared_ptr< EveType > > types;
+    std::unordered_map< tTypeId, std::shared_ptr< const EveType > > types;
     std::unordered_set< tTypeId > relevantTypeIds;
 
     emit RessourcesLoadingSubStepChanged( 0, PROGRESS_TOTAL_STEPS, "Identifying relevant blueprints and materials..." );
@@ -218,6 +204,46 @@ void RessourcesManager::FilterIrrelevantData( const QString& groupFilepath )
     }
     types_.clear();
     types_ = std::move( types );
+}
+
+void RessourcesManager::SetManufacturableTypes()
+{
+    for ( auto it = blueprints_.begin(); it != blueprints_.end(); )
+    {
+        const auto& typeId = it->first;
+        const auto& blueprint = it->second;
+        const ManufacturingJob& job = blueprint->GetManufacturingJob();
+
+        if ( job.manufacturedProducts.empty() )
+        {
+            LOG_WARNING( "Blueprint with typeId {} has no manufactured products, removing from blueprints list.", typeId );
+            it = blueprints_.erase( it );
+            continue;
+        }
+
+        bool remove = false;
+        for ( const auto& product : job.manufacturedProducts )
+        {
+            if ( types_.find( product.item ) == types_.end() )
+            {
+                LOG_WARNING( "Blueprint with typeId {} produces item with typeId {} which is not in the types list, removing blueprint.",
+                             typeId,
+                             product.item );
+                remove = true;
+                break;
+            }
+            else
+            {
+                types_.at( product.item )->SetIsManufacturable( true );
+                types_.at( product.item )->SetSourceBlueprintId( typeId );
+            }
+        }
+
+        if ( remove )
+            it = blueprints_.erase( it );
+        else
+            ++it;
+    }
 }
 
 bool RessourcesManager::SaveToBinaryFile()
@@ -289,8 +315,6 @@ bool RessourcesManager::LoadMapsFromBinaryFiles()
     emit RessourcesLoadingSubStepChanged( 2, PROGRESS_TOTAL_STEPS, "Loading ores from binary files..." );
     if ( !BuildMapFromBinaryFile< Ore >( BINARY_ORES_FILEPATH_, ores_ ) )
         return false;
-    isRessourcesReady_ = true;
-    emit RessourcesReady();
     emit RessourcesLoadingSubStepChanged( PROGRESS_TOTAL_STEPS, PROGRESS_TOTAL_STEPS, "Done." );
     return true;
 }
@@ -314,8 +338,27 @@ unsigned int RessourcesManager::GetNumberOfLinesInFile( QFile& file )
     return lineCount;
 }
 
+void RessourcesManager::AddMarketPricesToTypes( const QJsonObject& marketPricesJson )
+{
+    for ( auto& [ typeId, eveType ] : types_ )
+    {
+        if ( marketPricesJson.contains( QString::number( typeId ) ) )
+        {
+            QJsonObject priceObj = marketPricesJson.value( QString::number( typeId ) ).toObject();
+            eveType->SetMarketPrice( priceObj.value( "averagePrice" ).toDouble(), priceObj.value( "adjustedPrice" ).toDouble() );
+        }
+    }
+}
+
+void RessourcesManager::OnRessourcesReady()
+{
+    isRessourcesReady_ = true;
+    GlobalRessources::SetRessources( std::move( types_ ), std::move( blueprints_ ), std::move( ores_ ) );
+    emit RessourcesReady();
+}
+
 template < JsonEveChild T >
-QJsonObject RessourcesManager::GetJsonFromMap( const std::unordered_map< tTypeId, std::shared_ptr< T > >& map ) const
+QJsonObject RessourcesManager::GetJsonFromMap( const TypeIdMap< T >& map ) const
 {
     QJsonObject result;
     for ( const auto& [ typeId, element ] : map )
@@ -328,7 +371,7 @@ QJsonObject RessourcesManager::GetJsonFromMap( const std::unordered_map< tTypeId
 }
 
 template < JsonEveChild T >
-bool RessourcesManager::BuildMapFromBinaryFile( const QString& filePath, std::unordered_map< tTypeId, std::shared_ptr< T > >& targetMap )
+bool RessourcesManager::BuildMapFromBinaryFile( const QString& filePath, TypeIdMap< T >& targetMap )
 {
     QFile binFile;
     if ( !OpenFile( filePath, binFile, true ) )
@@ -347,6 +390,7 @@ bool RessourcesManager::BuildMapFromBinaryFile( const QString& filePath, std::un
     {
         QJsonObject elementObj = jsonobject.value( key ).toObject();
         tTypeId elementTypeId = key.toInt();
+        elementObj.insert( "_key", static_cast< int >( elementTypeId ) );
         std::shared_ptr< T > element = std::make_shared< T >( elementObj );
         if ( element->IsValid() )
         {
@@ -367,9 +411,7 @@ bool RessourcesManager::BuildMapFromBinaryFile( const QString& filePath, std::un
 }
 
 template < JsonEveChild T >
-inline bool RessourcesManager::BuildMapFromJsonlFile( const QString& filePath,
-                                                      std::unordered_map< tTypeId, std::shared_ptr< T > >& targetMap,
-                                                      eDataLoadingSteps step )
+inline bool RessourcesManager::BuildMapFromJsonlFile( const QString& filePath, TypeIdMap< T >& targetMap, eDataLoadingSteps step )
 {
     SetLoadingStep( step );
     QFile jsonFile;
@@ -412,25 +454,14 @@ inline bool RessourcesManager::BuildMapFromJsonlFile( const QString& filePath,
     return true;
 }
 
-template bool RessourcesManager::BuildMapFromJsonlFile< EveType >( const QString&,
-                                                                   std::unordered_map< tTypeId, std::shared_ptr< EveType > >&,
-                                                                   eDataLoadingSteps );
-template bool RessourcesManager::BuildMapFromJsonlFile< Blueprint >( const QString&,
-                                                                     std::unordered_map< tTypeId, std::shared_ptr< Blueprint > >&,
-                                                                     eDataLoadingSteps );
-template bool RessourcesManager::BuildMapFromJsonlFile< Ore >( const QString&,
-                                                               std::unordered_map< tTypeId, std::shared_ptr< Ore > >&,
-                                                               eDataLoadingSteps );
+template bool RessourcesManager::BuildMapFromJsonlFile< EveType >( const QString&, TypeIdMap< EveType >&, eDataLoadingSteps );
+template bool RessourcesManager::BuildMapFromJsonlFile< Blueprint >( const QString&, TypeIdMap< Blueprint >&, eDataLoadingSteps );
+template bool RessourcesManager::BuildMapFromJsonlFile< Ore >( const QString&, TypeIdMap< Ore >&, eDataLoadingSteps );
 
-template QJsonObject RessourcesManager::GetJsonFromMap< EveType >( const std::unordered_map< tTypeId, std::shared_ptr< EveType > >& ) const;
-template QJsonObject
-RessourcesManager::GetJsonFromMap< Blueprint >( const std::unordered_map< tTypeId, std::shared_ptr< Blueprint > >& ) const;
-template QJsonObject RessourcesManager::GetJsonFromMap< Ore >( const std::unordered_map< tTypeId, std::shared_ptr< Ore > >& ) const;
+template QJsonObject RessourcesManager::GetJsonFromMap< EveType >( const TypeIdMap< EveType >& ) const;
+template QJsonObject RessourcesManager::GetJsonFromMap< Blueprint >( const TypeIdMap< Blueprint >& ) const;
+template QJsonObject RessourcesManager::GetJsonFromMap< Ore >( const TypeIdMap< Ore >& ) const;
 
-template bool RessourcesManager::BuildMapFromBinaryFile< EveType >( const QString& filePath,
-                                                                    std::unordered_map< tTypeId, std::shared_ptr< EveType > >& targetMap );
-template bool
-RessourcesManager::BuildMapFromBinaryFile< Blueprint >( const QString& filePath,
-                                                        std::unordered_map< tTypeId, std::shared_ptr< Blueprint > >& targetMap );
-template bool RessourcesManager::BuildMapFromBinaryFile< Ore >( const QString& filePath,
-                                                                std::unordered_map< tTypeId, std::shared_ptr< Ore > >& targetMap );
+template bool RessourcesManager::BuildMapFromBinaryFile< EveType >( const QString& filePath, TypeIdMap< EveType >& targetMap );
+template bool RessourcesManager::BuildMapFromBinaryFile< Blueprint >( const QString& filePath, TypeIdMap< Blueprint >& targetMap );
+template bool RessourcesManager::BuildMapFromBinaryFile< Ore >( const QString& filePath, TypeIdMap< Ore >& targetMap );

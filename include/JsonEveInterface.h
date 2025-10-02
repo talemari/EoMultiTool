@@ -1,6 +1,8 @@
 #pragma once
 #include "HelperTypes.h"
 
+#include <QString>
+
 class QJsonObject;
 
 class JsonEveInterface
@@ -17,14 +19,14 @@ public:
     virtual void FromJsonObject( const QJsonObject& obj ) = 0;
     virtual QJsonObject ToJsonObject() const = 0;
 
-    bool IsValid() const
-    {
-        return isValid_;
-    }
-    tTypeId GetTypeId() const
-    {
-        return typeId_;
-    }
+    bool IsValid() const;
+    tTypeId GetTypeId() const;
+    QString GetName() const;
+
+    bool operator==( const JsonEveInterface& other ) const;
+    bool operator!=( const JsonEveInterface& other ) const;
+    bool operator<( const JsonEveInterface& other ) const;
+    bool operator>( const JsonEveInterface& other ) const;
 
 protected:
     bool isValid_ = false;

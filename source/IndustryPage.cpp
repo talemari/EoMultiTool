@@ -1,30 +1,47 @@
 #include "IndustryPage.h"
 #include "Blueprint.h"
+#include "BlueprintMaterialRequirementDisplay.h"
 #include "EveType.h"
+#include "GlobalRessources.h"
 #include "RessourcesManager.h"
 
 #include <QComboBox>
+#include <QGridLayout>
 #include <QVBoxLayout>
 
-IndustryPage::IndustryPage( std::shared_ptr< RessourcesManager > ressourcesManager, QWidget* parent )
+IndustryPage::IndustryPage( QWidget* parent )
     : QWidget( parent )
-    , ressourcesManager_( ressourcesManager )
+    , blueprintMaterialRequirementDisplay_( new BlueprintMaterialRequirementDisplay( this ) )
 {
-    QVBoxLayout* mainLayout = new QVBoxLayout( this );
+    QGridLayout* mainLayout = new QGridLayout( this );
     QComboBox* blueprintSelectionCombobox = BuildBlueprintsComboBox();
-    mainLayout->addWidget( blueprintSelectionCombobox );
+    mainLayout->addWidget( blueprintSelectionCombobox, 0, 0, 1, 2 );
+    mainLayout->addWidget( blueprintMaterialRequirementDisplay_, 1, 0, 1, 2 );
 }
 
 QComboBox* IndustryPage::BuildBlueprintsComboBox()
 {
     QComboBox* result = new QComboBox();
-    auto& blueprintMap = ressourcesManager_->GetBlueprintsMap();
+    auto& blueprintMap = GlobalRessources::GetBlueprintsMap();
+    result->setEditable( true );
 
     for ( const auto& [ typeId, blueprint ] : blueprintMap )
     {
-        QString blueprintName = QString::fromStdString( ressourcesManager_->GetTypeById( typeId )->GetName() );
+        QString blueprintName = blueprint->GetName();
         result->addItem( blueprintName, QVariant::fromValue( typeId ) );
     }
+    connect( result,
+             QOverload< int >::of( &QComboBox::currentIndexChanged ),
+             this,
+             [ this, result ]( int index )
+             {
+                 if ( index < 0 )
+                     return;
+                 tTypeId typeId = result->currentData().toUInt();
+                 const std::shared_ptr< const Blueprint > blueprint = GlobalRessources::GetBlueprintById( typeId );
+                 if ( blueprint != nullptr )
+                     blueprintMaterialRequirementDisplay_->SetBlueprint( blueprint );
+             } );
 
     return result;
 }

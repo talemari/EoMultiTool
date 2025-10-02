@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "DataLoadingWidget.h"
+#include "IndustryPage.h"
 #include "LogManager.h"
 #include "RessourcesManager.h"
 #include "SideMenu.h"
@@ -26,7 +27,8 @@ MainWindow::MainWindow( const QString& appName, const QString& version, QWidget*
     , pages_( new QStackedWidget )
     , sideMenu_( new SideMenu )
     , settings_( QDir( QCoreApplication::applicationDirPath() ).filePath( "settings.ini" ), QSettings::IniFormat )
-    , ressourcesManager_( std::make_shared< RessourcesManager >( settings_ ) )
+    , ressourcesManager_( std::make_unique< RessourcesManager >( settings_ ) )
+    , industryPage_( nullptr )
 {
     app_ = dynamic_cast< QApplication* >( QApplication::instance() );
     installEventFilter( this );
@@ -171,6 +173,18 @@ void MainWindow::BuildBaseInterface()
 
 void MainWindow::OnDataLoadingFinished()
 {
+    LOG_NOTICE( "Quitting data loading thread" );
+    dataLoadingThread_->quit();
+    dataLoadingThread_->wait();
+    LOG_NOTICE( "Thread closed" );
+    dataLoadingThread_->deleteLater();
+    ressourcesManager_->deleteLater();
+
+    industryPage_ = new IndustryPage();
+    AddPage( industryPage_ );
+    sideMenu_->show();
+    GoToPage( 1 );
+    LOG_NOTICE( "Data loading finished" );
 }
 
 void MainWindow::StartDataLoading()
@@ -197,6 +211,8 @@ void MainWindow::StartDataLoading()
              dataLoadingWidget,
              &DataLoadingWidget::OnErrorOccurred,
              Qt::QueuedConnection );
+    connect(
+        ressourcesManager_.get(), &RessourcesManager::RessourcesReady, this, &MainWindow::OnDataLoadingFinished, Qt::QueuedConnection );
 
     connect( dataLoadingThread_, &QThread::started, ressourcesManager_.get(), &RessourcesManager::LoadRessources );
     dataLoadingThread_->start();

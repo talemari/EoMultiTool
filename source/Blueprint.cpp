@@ -12,6 +12,11 @@ Blueprint::Blueprint( const QJsonObject& jsonData )
 void Blueprint::FromJsonObject( const QJsonObject& jsonData )
 {
     typeId_ = jsonData.value( "_key" ).toInt();
+    if ( typeId_ == 0 )
+    {
+        LOG_WARNING( "Blueprint does not contain a valid typeId." );
+        return;
+    }
     if ( jsonData.contains( "activities" ) && !jsonData.value( "activities" ).isNull() )
     {
         QJsonObject activitiesObj = jsonData.value( "activities" ).toObject();
@@ -50,8 +55,8 @@ QJsonObject Blueprint::ToJsonObject() const
     for ( const auto& matReq : manufacturingJob_.matRequirements )
     {
         QJsonObject matObj;
-        matObj[ "typeID" ] = QString::number( matReq.item );
-        matObj[ "quantity" ] = QString::number( matReq.quantity );
+        matObj[ "typeID" ] = static_cast< qint64 >( matReq.item );
+        matObj[ "quantity" ] = static_cast< qint64 >( matReq.quantity );
         materialsArray.append( matObj );
     }
     manufacturingObj[ "materials" ] = materialsArray;
@@ -60,8 +65,8 @@ QJsonObject Blueprint::ToJsonObject() const
     for ( const auto& product : manufacturingJob_.manufacturedProducts )
     {
         QJsonObject prodObj;
-        prodObj[ "typeID" ] = QString::number( product.item );
-        prodObj[ "quantity" ] = QString::number( product.quantity );
+        prodObj[ "typeID" ] = static_cast< qint64 >( product.item );
+        prodObj[ "quantity" ] = static_cast< qint64 >( product.quantity );
         productsArray.append( prodObj );
     }
     manufacturingObj[ "products" ] = productsArray;
@@ -72,7 +77,7 @@ QJsonObject Blueprint::ToJsonObject() const
     return obj;
 }
 
-ManufacturingJob Blueprint::GetManufacturingJob() const
+const ManufacturingJob& Blueprint::GetManufacturingJob() const
 {
     return manufacturingJob_;
 }
