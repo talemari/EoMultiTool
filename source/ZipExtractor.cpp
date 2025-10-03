@@ -17,9 +17,14 @@ static inline bool EnsureParentDir( const QString& filePath )
 
 static QString GetZipErrorString( int zipErrorCode )
 {
-    char errBuf[ 1024 ];
-    zip_error_to_str( errBuf, sizeof( errBuf ), zipErrorCode, errno );
-    return QString::fromUtf8( errBuf );
+    zip_error_t error;
+    zip_error_init_with_code( &error, zipErrorCode );
+
+    const char* errMsg = zip_error_strerror( &error );
+    QString result = QString::fromUtf8( errMsg );
+
+    zip_error_fini( &error );
+    return result;
 }
 
 static uLong Crc32OfFile( const QString& path, qint64* outSize = nullptr )

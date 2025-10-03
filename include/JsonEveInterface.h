@@ -18,6 +18,7 @@ public:
 
     virtual void FromJsonObject( const QJsonObject& obj ) = 0;
     virtual QJsonObject ToJsonObject() const = 0;
+    virtual void PostLoadingInitialization() = 0; // Actions to perform after all json loading is done.
 
     bool IsValid() const;
     tTypeId GetTypeId() const;

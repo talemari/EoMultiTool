@@ -20,17 +20,11 @@ BlueprintMaterialRequirementDisplay::BlueprintMaterialRequirementDisplay( QWidge
 
 void BlueprintMaterialRequirementDisplay::AddMaterialsToTree( const std::shared_ptr< const Blueprint > blueprint, QTreeWidgetItem* parent )
 {
-    const auto& materials = blueprint->GetManufacturingJob().matRequirements;
-    std::vector< WithQuantity< EveType > > components;
-    for ( const auto& matReq : materials )
+    auto job = blueprint->GetManufacturingJob();
+    const auto rawMaterials = job->GetRawMaterials();
+    for ( const auto& matReq : rawMaterials )
     {
         const EveType& matType = *GlobalRessources::GetTypeById( matReq.item );
-        if ( matType.IsManufacturable() )
-        {
-            components.emplace_back( matType, matReq.quantity );
-            continue;
-        }
-
         if ( totalRawMaterials_.contains( matType ) )
         {
             totalRawMaterials_.at( matType ) += matReq.quantity;
@@ -44,12 +38,13 @@ void BlueprintMaterialRequirementDisplay::AddMaterialsToTree( const std::shared_
         auto* newChild = new QTreeWidgetItem( { matName, QString::number( matReq.quantity ), QString::number( basePrice ) } );
         parent->addChild( newChild );
     }
+    const auto components = job->GetComponents();
     for ( auto& component : components )
     {
-        const std::shared_ptr< const Blueprint > componentBlueprint =
-            GlobalRessources::GetBlueprintById( component.item.GetSourceBlueprintId() );
-        QTreeWidgetItem* compItem = new QTreeWidgetItem(
-            parent, { QString::fromStdString( component.item.GetName() ), QString::number( component.quantity ), "0" } );
+        const EveType& compType = *GlobalRessources::GetTypeById( component.item );
+        const std::shared_ptr< const Blueprint > componentBlueprint = GlobalRessources::GetBlueprintById( compType.GetSourceBlueprintId() );
+        QTreeWidgetItem* compItem =
+            new QTreeWidgetItem( parent, { QString::fromStdString( compType.GetName() ), QString::number( component.quantity ), "0" } );
         AddMaterialsToTree( componentBlueprint, compItem );
         LOG_NOTICE( "Added component {} to list", componentBlueprint->GetName().toStdString() );
     }

@@ -1,19 +1,12 @@
 #pragma once
 #include "HelperTypes.h"
 #include "JsonEveInterface.h"
+#include "ManufacturingJob.h"
 
 #include <memory>
 #include <vector>
 
 class QJsonObject;
-
-struct ManufacturingJob
-{
-    bool isValid = false;
-    unsigned int timeInSeconds = 0;
-    std::vector< WithQuantity< tTypeId > > manufacturedProducts;
-    std::vector< WithQuantity< tTypeId > > matRequirements;
-};
 
 class Blueprint : public JsonEveInterface
 {
@@ -24,14 +17,12 @@ public:
 
     void FromJsonObject( const QJsonObject& jsonData ) override;
     QJsonObject ToJsonObject() const override;
+    void PostLoadingInitialization() override;
 
-    const ManufacturingJob& GetManufacturingJob() const;
-
-private:
-    void ParseManufacturingJob( const QJsonObject& jsonData );
+    const std::shared_ptr< ManufacturingJob > GetManufacturingJob() const;
 
 private:
     double matEfficiency_ = 0.0;
     double timeEfficiency_ = 0.0;
-    ManufacturingJob manufacturingJob_;
+    std::shared_ptr< ManufacturingJob > manufacturingJob_ = nullptr;
 };

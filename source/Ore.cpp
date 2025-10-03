@@ -67,6 +67,10 @@ QJsonObject Ore::ToJsonObject() const
     return obj;
 }
 
+void Ore::PostLoadingInitialization()
+{
+}
+
 const std::vector< WithQuantity< tTypeId > >& Ore::GetRefinedProducts() const
 {
     return refinedProducts_;

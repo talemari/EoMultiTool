@@ -46,7 +46,7 @@ private:
     template < JsonEveChild T >
     bool BuildMapFromJsonlFile( const QString& filePath, TypeIdMap< T >& targetMap, eDataLoadingSteps step );
     void RemoveNonOreMaterials( const QString& groupFilepath );
-    void FilterIrrelevantData( const QString& groupFilepath );
+    void FilterIrrelevantTypes( const QString& groupFilepath );
     void SetManufacturableTypes();
     bool SaveToBinaryFile();
 
@@ -60,6 +60,8 @@ private:
     unsigned int GetNumberOfLinesInFile( QFile& file );
 
     void AddMarketPricesToTypes( const QJsonObject& marketPricesJson );
+    void AddReprocessedFromOreDataToTypes();
+    bool IsBlueprintValid( const Blueprint& blueprint ) const;
 
 private slots:
     void LoadSdeData();

@@ -1,5 +1,9 @@
 #include "GlobalRessources.h"
 
+#include "Blueprint.h"
+#include "EveType.h"
+#include "Ore.h"
+
 #include <stdexcept>
 
 GlobalRessources& GlobalRessources::Get()
@@ -8,7 +12,7 @@ GlobalRessources& GlobalRessources::Get()
     return instance;
 }
 
-const TypeIdMap< const EveType >& GlobalRessources::GetTypesMap()
+const TypeIdMap< EveType >& GlobalRessources::GetTypesMap()
 {
     if ( !Get().areRessourcesReady_ )
     {
@@ -17,7 +21,7 @@ const TypeIdMap< const EveType >& GlobalRessources::GetTypesMap()
     return Get().types_;
 }
 
-const TypeIdMap< const Blueprint >& GlobalRessources::GetBlueprintsMap()
+const TypeIdMap< Blueprint >& GlobalRessources::GetBlueprintsMap()
 {
     if ( !Get().areRessourcesReady_ )
     {
@@ -26,7 +30,7 @@ const TypeIdMap< const Blueprint >& GlobalRessources::GetBlueprintsMap()
     return Get().blueprints_;
 }
 
-const TypeIdMap< const Ore >& GlobalRessources::GetOresMap()
+const TypeIdMap< Ore >& GlobalRessources::GetOresMap()
 {
     if ( !Get().areRessourcesReady_ )
     {
@@ -35,13 +39,19 @@ const TypeIdMap< const Ore >& GlobalRessources::GetOresMap()
     return Get().ores_;
 }
 
-const std::shared_ptr< const EveType > GlobalRessources::GetTypeById( tTypeId typeId )
+const std::shared_ptr< EveType > GlobalRessources::GetTypeById( tTypeId typeId )
 {
+    if ( !Get().GetTypesMap().contains( typeId ) )
+        return nullptr;
+
     return Get().GetTypesMap().at( typeId );
 }
 
-const std::shared_ptr< const Blueprint > GlobalRessources::GetBlueprintById( tTypeId typeId )
+const std::shared_ptr< Blueprint > GlobalRessources::GetBlueprintById( tTypeId typeId )
 {
+    if ( !Get().GetBlueprintsMap().contains( typeId ) )
+        return nullptr;
+
     return Get().GetBlueprintsMap().at( typeId );
 }
 
@@ -53,9 +63,16 @@ void GlobalRessources::ISetRessources( TypeIdMap< EveType >&& types, TypeIdMap< 
     blueprints_ = std::move( blueprints );
     ores_ = std::move( ores );
     areRessourcesReady_ = true;
+
+    for ( auto& type : types_ )
+        type.second->PostLoadingInitialization();
+    for ( auto& blueprint : blueprints_ )
+        blueprint.second->PostLoadingInitialization();
+    for ( auto& ore : ores_ )
+        ore.second->PostLoadingInitialization();
 }
 
-const std::shared_ptr< const EveType > GlobalRessources::IGetTypesById( tTypeId typeId ) const
+const std::shared_ptr< EveType > GlobalRessources::IGetTypesById( tTypeId typeId ) const
 {
     return GetTypesMap().at( typeId );
 }

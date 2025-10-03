@@ -65,6 +65,15 @@ void DataLoader::MarketPricesDownloaded( QByteArray data )
     }
     QJsonParseError parseError;
     QJsonDocument doc = QJsonDocument::fromJson( data, &parseError );
+#ifndef NDEBUG
+    QFile jsonVersion( sdeExtractedPath_ + "/market_prices.json" );
+    if ( jsonVersion.open( QIODevice::WriteOnly ) )
+    {
+        jsonVersion.write( doc.toJson( QJsonDocument::Indented ) );
+        jsonVersion.close();
+    }
+#endif // !NDEBUG
+
     if ( parseError.error != QJsonParseError::NoError )
     {
         TriggerError( tr( "Failed to parse market prices JSON: %1" ).arg( parseError.errorString() ) );
@@ -76,7 +85,6 @@ void DataLoader::MarketPricesDownloaded( QByteArray data )
         return;
     }
     QJsonArray jsonArray = doc.array();
-    QJsonObject marketPricesJson;
     for ( const QJsonValue& value : jsonArray )
     {
         if ( !value.isObject() )
@@ -88,9 +96,9 @@ void DataLoader::MarketPricesDownloaded( QByteArray data )
         double averagePrice = obj.value( "average_price" ).toDouble();
         double adjustedPrice = obj.value( "adjusted_price" ).toDouble();
         QJsonObject priceObj;
-        priceObj[ "averagePrice" ] = averagePrice;
-        priceObj[ "adjustedPrice" ] = adjustedPrice;
-        marketPricesJson[ QString::number( typeId ) ] = priceObj;
+        priceObj[ "average_price" ] = averagePrice;
+        priceObj[ "adjusted_price" ] = adjustedPrice;
+        marketPricesJson_[ QString::number( typeId ) ] = priceObj;
     }
     LOG_NOTICE( "Market prices downloaded and parsed successfully." );
     emit MarketPricesReady();

@@ -1,5 +1,7 @@
 #include "LPHelper.h"
 #include "Blueprint.h"
+#include "EveType.h"
+#include "GlobalRessources.h"
 #include "LogManager.h"
 #include "Ore.h"
 
@@ -26,8 +28,12 @@ bool LPHelper::SolveForBlueprint( const Blueprint& blueprint )
     constraintLowerBounds_.clear();
     constraintUpperBounds_.clear();
 
-    for ( const auto& requirement : manufacturingJob.matRequirements )
+    for ( const auto& requirement : manufacturingJob->GetRawMaterials() )
     {
+        const EveType& type = *GlobalRessources::GetTypeById( requirement.item );
+        if ( !type.IsReprocessedFromOre() )
+            continue;
+
         int rowStart = static_cast< int >( constraintColumnIndices_.size() );
         constraintRowStarts_.push_back( rowStart );
 
@@ -105,7 +111,7 @@ HighsLp LPHelper::BuildHighsLp( const Blueprint& blueprint ) const
 {
     HighsLp lp;
     lp.num_col_ = static_cast< int >( ores_.size() );
-    lp.num_row_ = static_cast< int >( blueprint.GetManufacturingJob().matRequirements.size() );
+    lp.num_row_ = static_cast< int >( blueprint.GetManufacturingJob()->GetFullMaterialList().size() );
 
     lp.col_cost_ = objectiveCoefficients_;
     lp.col_lower_ = lowerBounds_;
@@ -154,7 +160,7 @@ void LPHelper::ComputeLeftover( std::map< tTypeId, double >& produced, const Blu
 
         double required = 0.0;
         const auto& job = blueprint.GetManufacturingJob();
-        for ( const auto& req : job.matRequirements )
+        for ( const auto& req : job->GetRawMaterials() )
         {
             if ( req.item == typeId )
             {

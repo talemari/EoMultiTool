@@ -86,8 +86,9 @@ void RessourcesManager::LoadSdeData()
     if ( !BuildMapFromJsonlFile< Ore >( extractedSdePath + TYPEMATERIALS_JSONL, ores_, eDataLoadingSteps::LoadingOres ) )
         return;
     SetManufacturableTypes();
-    FilterIrrelevantData( extractedSdePath + GROUPS_JSONL );
+    FilterIrrelevantTypes( extractedSdePath + GROUPS_JSONL );
     AddMarketPricesToTypes( marketPricesJson );
+    AddReprocessedFromOreDataToTypes();
     if ( !SaveToBinaryFile() )
         return;
 
@@ -166,33 +167,46 @@ void RessourcesManager::RemoveNonOreMaterials( const QString& groupFilePath )
     LOG_NOTICE( "Removed {} non-ore materials from ores list, leaving {} ores", removedCount, ores_.size() );
 }
 
-void RessourcesManager::FilterIrrelevantData( const QString& groupFilepath )
+void RessourcesManager::FilterIrrelevantTypes( const QString& groupFilepath )
 {
     SetLoadingStep( eDataLoadingSteps::FilteringIrrelevantData );
     static constexpr unsigned int PROGRESS_TOTAL_STEPS = 3;
-    std::unordered_map< tTypeId, std::shared_ptr< const EveType > > types;
+    std::unordered_map< tTypeId, std::shared_ptr< EveType > > types;
     std::unordered_set< tTypeId > relevantTypeIds;
 
     emit RessourcesLoadingSubStepChanged( 0, PROGRESS_TOTAL_STEPS, "Identifying relevant blueprints and materials..." );
     unsigned int removedBlueprints = 0;
-    for ( const auto& [ blueprintId, blueprint ] : blueprints_ )
+    for ( auto it = blueprints_.begin(); it != blueprints_.end(); )
     {
-        ManufacturingJob job = blueprint->GetManufacturingJob();
-        if ( !job.isValid )
+        const Blueprint& blueprint = *( it->second );
+        const EveType& type = *types_.at( blueprint.GetTypeId() );
+        if ( !type.IsPublished() )
         {
+            it = blueprints_.erase( it );
             removedBlueprints++;
             continue;
         }
 
-        relevantTypeIds.insert( blueprintId );
-        for ( const auto& product : job.manufacturedProducts )
-        {
+        relevantTypeIds.insert( blueprint.GetTypeId() );
+        const auto job = blueprint.GetManufacturingJob();
+
+        for ( const auto& product : job->GetManufacturedProducts() )
             relevantTypeIds.insert( product.item );
-        }
-        for ( const auto& matReq : job.matRequirements )
-        {
+        for ( const auto& matReq : job->GetFullMaterialList() )
             relevantTypeIds.insert( matReq.item );
+        it++;
+    }
+
+    for ( auto it = ores_.begin(); it != ores_.end(); )
+    {
+        tTypeId typeId = it->second->GetTypeId();
+        if ( !types_.contains( typeId ) || !types_.at( typeId )->IsPublished() )
+        {
+            LOG_NOTICE( "Ore with typeId {} has no corresponding EveType, removing from ores list.", typeId );
+            it = ores_.erase( it );
+            continue;
         }
+        ++it;
     }
     emit RessourcesLoadingSubStepChanged( 1, PROGRESS_TOTAL_STEPS, "Filtering Non ore materials..." );
     RemoveNonOreMaterials( groupFilepath );
@@ -212,9 +226,9 @@ void RessourcesManager::SetManufacturableTypes()
     {
         const auto& typeId = it->first;
         const auto& blueprint = it->second;
-        const ManufacturingJob& job = blueprint->GetManufacturingJob();
+        const auto& job = blueprint->GetManufacturingJob();
 
-        if ( job.manufacturedProducts.empty() )
+        if ( job->GetManufacturedProducts().empty() )
         {
             LOG_WARNING( "Blueprint with typeId {} has no manufactured products, removing from blueprints list.", typeId );
             it = blueprints_.erase( it );
@@ -222,7 +236,7 @@ void RessourcesManager::SetManufacturableTypes()
         }
 
         bool remove = false;
-        for ( const auto& product : job.manufacturedProducts )
+        for ( const auto& product : job->GetManufacturedProducts() )
         {
             if ( types_.find( product.item ) == types_.end() )
             {
@@ -299,6 +313,14 @@ bool RessourcesManager::SaveJsonObjectToBinaryFile( const QJsonObject& jsonObjec
 
     file.close();
     settings_.setValue( "StaticData/" + binaryFilepath + "TotalElements", jsonObject.size() );
+#ifndef NDEBUG
+    QFile jsonVersion( binaryFilepath + ".json" );
+    if ( jsonVersion.open( QIODevice::WriteOnly ) )
+    {
+        jsonVersion.write( doc.toJson( QJsonDocument::Indented ) );
+        jsonVersion.close();
+    }
+#endif
     return true;
 }
 
@@ -345,9 +367,32 @@ void RessourcesManager::AddMarketPricesToTypes( const QJsonObject& marketPricesJ
         if ( marketPricesJson.contains( QString::number( typeId ) ) )
         {
             QJsonObject priceObj = marketPricesJson.value( QString::number( typeId ) ).toObject();
-            eveType->SetMarketPrice( priceObj.value( "averagePrice" ).toDouble(), priceObj.value( "adjustedPrice" ).toDouble() );
+            eveType->SetMarketPrice( priceObj.value( "average_price" ).toDouble(), priceObj.value( "adjusted_price" ).toDouble() );
         }
     }
+}
+
+void RessourcesManager::AddReprocessedFromOreDataToTypes()
+{
+    for ( const auto& [ oreTypeId, ore ] : ores_ )
+    {
+        for ( const auto& refinedProducts : ore->GetRefinedProducts() )
+        {
+            tTypeId materialTypeId = refinedProducts.item;
+            if ( types_.find( materialTypeId ) != types_.end() )
+                types_.at( materialTypeId )->SetIsReprocessedFromOre( true );
+        }
+    }
+}
+
+bool RessourcesManager::IsBlueprintValid( const Blueprint& blueprint ) const
+{
+    const auto job = blueprint.GetManufacturingJob();
+    if ( !job->IsValid() || !types_.contains( blueprint.GetTypeId() ) )
+    {
+        return false;
+    }
+    return true;
 }
 
 void RessourcesManager::OnRessourcesReady()

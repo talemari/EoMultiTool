@@ -9,6 +9,10 @@ EveType::EveType( const QJsonObject& jsonData )
 
 void EveType::FromJsonObject( const QJsonObject& jsonData )
 {
+    if ( jsonData.isEmpty() )
+        return;
+    isPublished_ = jsonData.value( "published" ).toBool( false );
+
     typeId_ = jsonData.value( "_key" ).toInt();
     groupId_ = jsonData.value( "groupID" ).toInt();
 
@@ -44,6 +48,8 @@ void EveType::FromJsonObject( const QJsonObject& jsonData )
         marketPrice_.averagePrice = marketPriceObj.value( "averagePrice" ).toDouble();
         marketPrice_.adjustedPrice = marketPriceObj.value( "adjustedPrice" ).toDouble();
     }
+    if ( jsonData.contains( "reprocessedFromOre" ) && !jsonData.value( "reprocessedFromOre" ).isNull() )
+        isReprocessedFromOre_ = jsonData.value( "reprocessedFromOre" ).toBool();
     isValid_ = true;
 }
 
@@ -86,8 +92,12 @@ QJsonObject EveType::ToJsonObject() const
     marketPriceObj[ "averagePrice" ] = marketPrice_.averagePrice;
     marketPriceObj[ "adjustedPrice" ] = marketPrice_.adjustedPrice;
     obj[ "marketPrice" ] = marketPriceObj;
-
+    obj[ "reprocessedFromOre" ] = isReprocessedFromOre_;
     return obj;
+}
+
+void EveType::PostLoadingInitialization()
+{
 }
 
 std::string EveType::GetName() const
@@ -125,17 +135,32 @@ tTypeId EveType::GetSourceBlueprintId() const
     return sourceBlueprintId_;
 }
 
-void EveType::SetIsManufacturable( bool isManufacturable ) const
+bool EveType::IsReprocessedFromOre() const
+{
+    return isReprocessedFromOre_;
+}
+
+bool EveType::IsPublished() const
+{
+    return isPublished_;
+}
+
+void EveType::SetIsManufacturable( bool isManufacturable )
 {
     isManufacturable_ = isManufacturable;
 }
 
-void EveType::SetSourceBlueprintId( tTypeId blueprintId ) const
+void EveType::SetIsReprocessedFromOre( bool isReprocessedFromOre )
+{
+    isReprocessedFromOre_ = isReprocessedFromOre;
+}
+
+void EveType::SetSourceBlueprintId( tTypeId blueprintId )
 {
     sourceBlueprintId_ = blueprintId;
 }
 
-void EveType::SetMarketPrice( double averagePrice, double adjustedPrice ) const
+void EveType::SetMarketPrice( double averagePrice, double adjustedPrice )
 {
     marketPrice_.averagePrice = averagePrice;
     marketPrice_.adjustedPrice = adjustedPrice;

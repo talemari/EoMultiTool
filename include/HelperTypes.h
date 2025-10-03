@@ -5,7 +5,7 @@
 typedef unsigned int tTypeId;
 
 template < typename T >
-using TypeIdMap = std::unordered_map< tTypeId, std::shared_ptr< const T > >;
+using TypeIdMap = std::unordered_map< tTypeId, std::shared_ptr< T > >;
 
 template < typename T >
 struct WithQuantity

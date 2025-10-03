@@ -6,7 +6,7 @@
 #include <highs/Highs.h>
 
 class Ore;
-struct Blueprint;
+class Blueprint;
 
 class LPHelper
 {

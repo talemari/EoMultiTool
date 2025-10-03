@@ -24,12 +24,12 @@ public:
         return Get().areRessourcesReady_;
     }
 
-    static const TypeIdMap< const EveType >& GetTypesMap();
-    static const TypeIdMap< const Blueprint >& GetBlueprintsMap();
-    static const TypeIdMap< const Ore >& GetOresMap();
+    static const TypeIdMap< EveType >& GetTypesMap();
+    static const TypeIdMap< Blueprint >& GetBlueprintsMap();
+    static const TypeIdMap< Ore >& GetOresMap();
 
-    static const std::shared_ptr< const EveType > GetTypeById( tTypeId typeId );
-    static const std::shared_ptr< const Blueprint > GetBlueprintById( tTypeId typeId );
+    static const std::shared_ptr< EveType > GetTypeById( tTypeId typeId );
+    static const std::shared_ptr< Blueprint > GetBlueprintById( tTypeId typeId );
 
     static bool IsBlueprint( tTypeId typeId )
     {
@@ -40,7 +40,7 @@ private:
     GlobalRessources() = default;
 
     void ISetRessources( TypeIdMap< EveType >&& types, TypeIdMap< Blueprint >&& blueprints, TypeIdMap< Ore >&& ores );
-    const std::shared_ptr< const EveType > IGetTypesById( tTypeId typeId ) const;
+    const std::shared_ptr< EveType > IGetTypesById( tTypeId typeId ) const;
     bool IIsBlueprint( tTypeId typeId ) const;
 
 private:

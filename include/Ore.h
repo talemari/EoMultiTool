@@ -15,6 +15,7 @@ public:
 
     void FromJsonObject( const QJsonObject& jsonData );
     QJsonObject ToJsonObject() const override;
+    void PostLoadingInitialization() override;
 
     const std::vector< WithQuantity< tTypeId > >& GetRefinedProducts() const;
     double GetBasePrice() const;
