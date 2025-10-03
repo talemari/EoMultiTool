@@ -25,13 +25,6 @@ void BlueprintMaterialRequirementDisplay::AddMaterialsToTree( const std::shared_
     for ( const auto& matReq : rawMaterials )
     {
         const EveType& matType = *GlobalRessources::GetTypeById( matReq.item );
-        if ( totalRawMaterials_.contains( matType ) )
-        {
-            totalRawMaterials_.at( matType ) += matReq.quantity;
-            continue;
-        }
-        else
-            totalRawMaterials_[ matType ] = matReq.quantity;
 
         QString matName = QString::fromStdString( matType.GetName() );
         int basePrice = matType.GetBasePrice();
@@ -53,17 +46,17 @@ void BlueprintMaterialRequirementDisplay::AddMaterialsToTree( const std::shared_
 void BlueprintMaterialRequirementDisplay::SetBlueprint( const std::shared_ptr< const Blueprint > blueprint )
 {
     materialsTree_->clear();
-    totalRawMaterials_.clear();
     QTreeWidgetItem* root = new QTreeWidgetItem( materialsTree_, { blueprint->GetName(), "1", "0" } );
     QTreeWidgetItem* totalRawMats = new QTreeWidgetItem( root, { tr( "Total raw materials" ), "", "" } );
     QTreeWidgetItem* details = new QTreeWidgetItem( root, { tr( "Details" ), "", "" } );
     AddMaterialsToTree( blueprint, details );
 
-    for ( const auto& [ matType, quantity ] : totalRawMaterials_ )
+    for ( const auto& [ matTypeId, quantity ] : blueprint->GetManufacturingJob()->GetRecursedRawMaterialList() )
     {
-        QString matName = QString::fromStdString( matType.GetName() );
-        int basePrice = matType.GetBasePrice();
-        auto* newChild = new QTreeWidgetItem( { matName, QString::number( quantity ), QString::number( basePrice ) } );
+        const auto matType = GlobalRessources::GetTypeById( matTypeId );
+        QString matName = QString::fromStdString( matType->GetName() );
+        int averagePrice = matType->GetMarketPrice().averagePrice;
+        auto* newChild = new QTreeWidgetItem( { matName, QString::number( quantity ), QString::number( averagePrice ) } );
         totalRawMats->addChild( newChild );
     }
 

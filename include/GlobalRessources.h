@@ -31,6 +31,8 @@ public:
     static const std::shared_ptr< EveType > GetTypeById( tTypeId typeId );
     static const std::shared_ptr< Blueprint > GetBlueprintById( tTypeId typeId );
 
+    static const std::shared_ptr< Blueprint > GetBlueprintByProductId( tTypeId productId );
+
     static bool IsBlueprint( tTypeId typeId )
     {
         return Get().IIsBlueprint( typeId );

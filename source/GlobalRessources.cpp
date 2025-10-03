@@ -55,6 +55,20 @@ const std::shared_ptr< Blueprint > GlobalRessources::GetBlueprintById( tTypeId t
     return Get().GetBlueprintsMap().at( typeId );
 }
 
+const std::shared_ptr< Blueprint > GlobalRessources::GetBlueprintByProductId( tTypeId productId )
+{
+    for ( const auto& [ _, blueprint ] : Get().blueprints_ )
+    {
+        const auto& products = blueprint->GetManufacturingJob()->GetManufacturedProducts();
+        for ( const auto& [ typeId, _ ] : products )
+        {
+            if ( typeId == productId )
+                return blueprint;
+        }
+    }
+    return nullptr;
+}
+
 void GlobalRessources::ISetRessources( TypeIdMap< EveType >&& types, TypeIdMap< Blueprint >&& blueprints, TypeIdMap< Ore >&& ores )
 {
     if ( areRessourcesReady_ )

@@ -1,6 +1,8 @@
 #pragma once
 #include "HelperTypes.h"
 
+#include <map>
+
 class QJsonObject;
 
 class ManufacturingJob
@@ -17,6 +19,8 @@ public:
     const std::vector< WithQuantity< tTypeId > >& GetRawMaterials() const;
     const std::vector< WithQuantity< tTypeId > >& GetManufacturedProducts() const;
     const std::vector< WithQuantity< tTypeId > >& GetFullMaterialList() const;
+
+    std::map< tTypeId, unsigned int > GetRecursedRawMaterialList() const;
 
     bool IsValid() const;
 

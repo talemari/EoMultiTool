@@ -32,6 +32,7 @@ public:
     tTypeId GetSourceBlueprintId() const;
     bool IsReprocessedFromOre() const;
     bool IsPublished() const;
+    MarketPrice GetMarketPrice() const;
 
 private:
     void SetIsManufacturable( bool isManufacturable );

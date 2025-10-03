@@ -3,6 +3,7 @@
 
 class RessourcesManager;
 class BlueprintMaterialRequirementDisplay;
+class CompressedOreWidget;
 
 class QComboBox;
 
@@ -19,4 +20,5 @@ private:
 
 private:
     BlueprintMaterialRequirementDisplay* blueprintMaterialRequirementDisplay_;
+    CompressedOreWidget* compressedOreWidget_;
 };

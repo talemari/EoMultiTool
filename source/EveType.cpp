@@ -145,6 +145,11 @@ bool EveType::IsPublished() const
     return isPublished_;
 }
 
+MarketPrice EveType::GetMarketPrice() const
+{
+    return marketPrice_;
+}
+
 void EveType::SetIsManufacturable( bool isManufacturable )
 {
     isManufacturable_ = isManufacturable;

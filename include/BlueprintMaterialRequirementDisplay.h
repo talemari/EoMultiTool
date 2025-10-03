@@ -27,5 +27,4 @@ private:
 
 private:
     QTreeWidget* materialsTree_;
-    std::map< EveType, unsigned int > totalRawMaterials_;
 };

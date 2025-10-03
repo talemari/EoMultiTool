@@ -5,7 +5,7 @@
 #include "LogManager.h"
 #include "Ore.h"
 
-LPHelper::LPHelper( const TypeIdMap< const Ore >& ores )
+LPHelper::LPHelper( const TypeIdMap< Ore >& ores )
     : ores_( ores )
 {
     for ( const auto& [ oreId, orePtr ] : ores_ )
@@ -28,12 +28,20 @@ bool LPHelper::SolveForBlueprint( const Blueprint& blueprint )
     constraintLowerBounds_.clear();
     constraintUpperBounds_.clear();
 
-    for ( const auto& requirement : manufacturingJob->GetRawMaterials() )
+    std::map< tTypeId, unsigned int > requiredMats = manufacturingJob->GetRecursedRawMaterialList();
+    for ( auto it = requiredMats.begin(); it != requiredMats.end(); )
     {
-        const EveType& type = *GlobalRessources::GetTypeById( requirement.item );
+        const EveType& type = *GlobalRessources::GetTypeById( it->first );
         if ( !type.IsReprocessedFromOre() )
+        {
+            it = requiredMats.erase( it );
             continue;
-
+        }
+        LOG_NOTICE( " Blueprint require {} x {}", it->first, it->second );
+        it++;
+    }
+    for ( const auto& [ requirement, quantity ] : requiredMats )
+    {
         int rowStart = static_cast< int >( constraintColumnIndices_.size() );
         constraintRowStarts_.push_back( rowStart );
 
@@ -43,7 +51,7 @@ bool LPHelper::SolveForBlueprint( const Blueprint& blueprint )
             double yield = 0.0;
             for ( const auto& product : orePtr->GetRefinedProducts() )
             {
-                if ( product.item == requirement.item )
+                if ( product.item == requirement )
                 {
                     yield = static_cast< double >( product.quantity ) / 100.0;
                     break;
@@ -56,7 +64,7 @@ bool LPHelper::SolveForBlueprint( const Blueprint& blueprint )
             }
             ++oreIndex;
         }
-        constraintLowerBounds_.push_back( static_cast< double >( requirement.quantity ) );
+        constraintLowerBounds_.push_back( static_cast< double >( quantity ) );
         constraintUpperBounds_.push_back( kHighsInf );
     }
     constraintRowStarts_.push_back( static_cast< int >( constraintColumnIndices_.size() ) );
@@ -111,7 +119,7 @@ HighsLp LPHelper::BuildHighsLp( const Blueprint& blueprint ) const
 {
     HighsLp lp;
     lp.num_col_ = static_cast< int >( ores_.size() );
-    lp.num_row_ = static_cast< int >( blueprint.GetManufacturingJob()->GetFullMaterialList().size() );
+    lp.num_row_ = static_cast< int >( constraintLowerBounds_.size() );
 
     lp.col_cost_ = objectiveCoefficients_;
     lp.col_lower_ = lowerBounds_;

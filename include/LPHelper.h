@@ -11,7 +11,7 @@ class Blueprint;
 class LPHelper
 {
 public:
-    LPHelper( const TypeIdMap< const Ore >& ores );
+    LPHelper( const TypeIdMap< Ore >& ores );
     ~LPHelper() = default;
 
     bool SolveForBlueprint( const Blueprint& blueprint );
@@ -24,7 +24,7 @@ private:
     void ComputeLeftover( std::map< tTypeId, double >& produced, const Blueprint& blueprint );
 
 private:
-    const TypeIdMap< const Ore >& ores_;
+    const TypeIdMap< Ore >& ores_;
     std::map< tTypeId, unsigned int > lpResult_;
     std::map< tTypeId, unsigned int > leftover_;
 

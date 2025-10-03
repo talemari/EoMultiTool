@@ -1,4 +1,5 @@
 #include "ManufacturingJob.h"
+#include "Blueprint.h"
 #include "EveType.h"
 #include "GlobalRessources.h"
 #include "LogManager.h"
@@ -136,6 +137,34 @@ const std::vector< WithQuantity< tTypeId > >& ManufacturingJob::GetManufacturedP
 const std::vector< WithQuantity< tTypeId > >& ManufacturingJob::GetFullMaterialList() const
 {
     return matRequirements_;
+}
+
+std::map< tTypeId, unsigned int > ManufacturingJob::GetRecursedRawMaterialList() const
+{
+    std::map< tTypeId, unsigned int > rawMaterialList;
+    for ( const auto& [ material, quantity ] : GetRawMaterials() )
+    {
+        if ( rawMaterialList.contains( material ) )
+            rawMaterialList[ material ] += quantity;
+        else
+            rawMaterialList[ material ] = quantity;
+    }
+
+    for ( const auto component : GetComponents() )
+    {
+        const std::shared_ptr< Blueprint > blueprint = GlobalRessources::GetBlueprintByProductId( component.item );
+        const auto job = blueprint->GetManufacturingJob();
+        std::map< tTypeId, unsigned int > componentRawMaterialList = job->GetRecursedRawMaterialList();
+        for ( const auto& [ componentMaterial, quantity ] : componentRawMaterialList )
+        {
+            if ( rawMaterialList.contains( componentMaterial ) )
+                rawMaterialList[ componentMaterial ] += quantity;
+            else
+                rawMaterialList[ componentMaterial ] = quantity;
+        }
+    }
+
+    return rawMaterialList;
 }
 
 bool ManufacturingJob::IsValid() const
